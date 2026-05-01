@@ -14,6 +14,19 @@ RUSTFLAGS_COMMON = \
 	-C link-arg=-Wl,--build-id=none \
 	-C link-arg=-Wl,--no-eh-frame-hdr
 
+# GL build: dynamically links libEGL + libGL; no relocation-model=static,
+# no -nostdlib (dynamic linker needs standard ELF layout).
+# -nostartfiles keeps our own _start while still emitting a dynamic section.
+RUSTFLAGS_GL = \
+	-C opt-level=z \
+	-C panic=abort \
+	-C lto=fat \
+	-C codegen-units=1 \
+	-C strip=symbols \
+	-C link-arg=-nostartfiles \
+	-C link-arg=-Wl,--build-id=none \
+	-C link-arg=-Wl,--no-eh-frame-hdr
+
 # Profile build: same opts but with debug symbols and build-id for flamegraph
 RUSTFLAGS_PROF = \
 	-C opt-level=z \
@@ -35,7 +48,7 @@ AURORA16_H := 180
 
 .PHONY: all clean pack run run16 record16 profile8 profile16
 
-# ── Default: smallest uncompressed binary (~8.1 KB, custom minimal ELF) ────────
+# ── Default: aurora8k (8 KB uncompressed) + aurora16k GL (GPU-accelerated) ───
 all: aurora8k aurora8k_packed aurora16k
 
 aurora8k: $(SRCS8) linker.ld
@@ -56,29 +69,27 @@ aurora8k_standard: $(SRCS8) linker-upx.ld
 		-C link-arg=-Wl,-T,linker-upx.ld \
 		-o $@
 
-# ── aurora16k: expanded 16 KB UPX-compressed variant ────────────────────────
-# Uncompressed standard ELF (measure with: wc -c aurora16k_standard)
-aurora16k_standard: $(SRCS16) linker-upx.ld
-	$(RUSTC) aurora16k.rs --edition $(EDITION) $(RUSTFLAGS_COMMON) \
-		-C link-arg=-Wl,-T,linker-upx.ld \
+# ── aurora16k: GPU-accelerated via EGL + OpenGL 3.3 fragment shader ──────────
+# Raymarcher runs entirely on the GPU; CPU only sets uniforms + reads pixels.
+# Streams raw RGB24 to stdout — pipe to ffplay (run16) or ffmpeg (record16).
+aurora16k_standard: $(SRCS16) linker-gl.ld
+	$(RUSTC) aurora16k.rs --edition $(EDITION) $(RUSTFLAGS_GL) \
+		-C link-arg=-Wl,-T,linker-gl.ld \
 		-o $@
 
-# UPX-packed target (goal: ≤16 384 bytes)
 aurora16k: aurora16k_standard
-	cp aurora16k_standard $@
-	$(UPX) --nrv2d -9 --force -q $@
+	@ls -lh $<
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 run: aurora8k
 	./aurora8k
 
-# Stream aurora16k to a window via ffplay (part of the ffmpeg package).
-# Resolution must match the W/PH constants in aurora16k.rs (default 320×180).
+# Stream GPU-rendered aurora16k to a window via ffplay.
+# GPU renders each 320×180 frame in milliseconds; ffplay updates in real time.
 # GStreamer alternative (if gst-launch-1.0 is installed):
 #   ./aurora16k_standard | gst-launch-1.0 fdsrc fd=0 do-timestamp=true \
 #     ! rawvideoparse width=$(AURORA16_W) height=$(AURORA16_H) format=rgb \
 #     ! videoconvert ! autovideosink sync=false
-# ffplay blocks until the first full RGB frame (~15–40 s of CPU raytracing typical).
 run16: aurora16k_standard
 	./aurora16k_standard | ffplay -f rawvideo -pixel_format rgb24 \
 	  -video_size $(AURORA16_W)x$(AURORA16_H) -i pipe:0
@@ -101,9 +112,10 @@ aurora8k_prof: $(SRCS8) linker-upx.ld
 		-C link-arg=-Wl,-T,linker-upx.ld \
 		-o $@
 
-aurora16k_prof: $(SRCS16) linker-upx.ld
-	$(RUSTC) aurora16k.rs --edition $(EDITION) $(RUSTFLAGS_PROF) \
-		-C link-arg=-Wl,-T,linker-upx.ld \
+aurora16k_prof: $(SRCS16) linker-gl.ld
+	$(RUSTC) aurora16k.rs --edition $(EDITION) $(RUSTFLAGS_GL) \
+		-g \
+		-C link-arg=-Wl,-T,linker-gl.ld \
 		-o $@
 
 profile8: aurora8k_prof
