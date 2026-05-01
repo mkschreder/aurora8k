@@ -236,7 +236,7 @@ fn put_h(h:&mut Hit,o:Hit)     { if o.d<h.d { *h=o; } }
 fn forest_hit(p0:V,t:f32)->Hit {
     let mut h=Hit{d:1e9,m:0};
     let r0=(p0.x*p0.x+p0.z*p0.z).sqrt();
-    if r0<3.8||r0>13.5 { return h; }
+    if r0<3.0||r0>14.5 { return h; }  // conservative: max jitter+reach ≈ 1.17+1.32=2.49
 
     let cell=2.2_f32;
     let gx=fast_floor(p0.x/cell);
@@ -247,7 +247,7 @@ fn forest_hit(p0:V,t:f32)->Hit {
             let cz=(gz+dj as f32)*cell;
             // Skip cells whose centre is too far for any tree to overlap p0
             let ddx=p0.x-cx; let ddz=p0.z-cz;
-            if ddx*ddx+ddz*ddz > 5.3 { continue; }  // max reach ≈ 2.3 units
+            if ddx*ddx+ddz*ddz > 6.5 { continue; }  // conservative: (jitter+reach)²≈6.19
             let cr=(cx*cx+cz*cz).sqrt();
             if cr<3.5||cr>14.2 { continue; }
 
@@ -381,8 +381,11 @@ fn map(p0:V,cx:&MapCtx)->Hit {
     let a12 =a;  // same atan2 as `a` — reuse to avoid second atan2 call
     // Shards at r=1.72 — skip when clearly out of reach (saves hash + sd_box + sin)
     if rr > 1.2 && rr < 2.3 {
-        let aa12=rep(a12,2.0*PI/12.0);
-        let hs  =hash(fast_floor(a12*(12.0/(2.0*PI)))*7.0);
+        // Consistent sector id: floor(a/s + 0.5) matches rep()'s modular boundary.
+        let sector12=2.0*PI/12.0;
+        let sid12=fast_floor(a12/sector12+0.5);
+        let aa12=a12-sid12*sector12;
+        let hs  =hash(sid12*7.0);
         let sq  =V::new(rr-1.72, p0.y-0.28*(hs*6.0+cx.t*0.5).sin(), aa12*rr);
         put(&mut h, sd_box(rot_z(sq,0.3+hs*0.55),V::new(0.04,0.33,0.09)), 9);
     }
@@ -399,9 +402,11 @@ fn map(p0:V,cx:&MapCtx)->Hit {
 
     // Standing stones at r=4.75 — skip when clearly out of reach (saves hash + sin + sd_box)
     if rr > 3.5 && rr < 5.8 {
-        let a7  =rep(a,2.0*PI/7.0);
+        let sector7=2.0*PI/7.0;
+        let sid7=fast_floor(a/sector7+0.5);
+        let a7=a-sid7*sector7;
         let stone_p=V::new(rr-4.75, p0.y+1.25, a7*rr*2.0);
-        let stone_seed=fast_floor(a*(7.0/(2.0*PI)))*9.3;
+        let stone_seed=sid7*9.3;
         let s_tilt=0.08*(stone_seed).sin();
         put(&mut h, sd_box(rot_z(stone_p,s_tilt),V::new(0.10,0.70+hash(stone_seed)*0.30,0.08)), 3);
     }
@@ -421,8 +426,10 @@ fn map(p0:V,cx:&MapCtx)->Hit {
 
     // Inner monoliths at r=1.25 — skip when clearly out of reach
     if rr > 0.8 && rr < 1.9 {
-        let a5 =rep(a,2.0*PI/5.0);
-        let m5_seed=fast_floor(a*(5.0/(2.0*PI)))*11.7;
+        let sector5=2.0*PI/5.0;
+        let sid5=fast_floor(a/sector5+0.5);
+        let a5=a-sid5*sector5;
+        let m5_seed=sid5*11.7;
         let m5_p=V::new(rr-1.25, p0.y+1.25, a5*rr*2.5);
         put(&mut h, sd_box(rot_z(m5_p,0.05*(m5_seed).sin()),
                            V::new(0.06, 0.35+hash(m5_seed)*0.20, 0.05)), 9);
@@ -430,7 +437,7 @@ fn map(p0:V,cx:&MapCtx)->Hit {
 
     // Forest — guarded by both XZ radius AND y range (skip for sky/underground rays)
     // r_xz == rr here (already computed)
-    if rr>3.5&&rr<14.0 && p0.y>-2.5 && p0.y<3.0 {
+    if rr>3.0&&rr<14.5 && p0.y>-2.5 && p0.y<3.2 {  // expanded: inner canopy at r≈3.08, outer at r≈14.2
         put_h(&mut h, forest_hit(p0,cx.t));
     }
 
@@ -438,13 +445,20 @@ fn map(p0:V,cx:&MapCtx)->Hit {
     // Guards the expensive terrain_h call inside; ruins at r=11.5 can't affect
     // the SDF when rr < 9.5 (minimum SDF ≥ 2.0, always dominated by nearer geometry).
     if rr > 9.5 {
-        let a6  =rep(a, 2.0*PI/6.0);
-        let ruin_seed=fast_floor(a*(6.0/(2.0*PI)))*17.1;
+        // Consistent sector id: use the same rounding as rep() (floor(a/s + 0.5))
+        // so the random seed boundary matches the geometry boundary exactly.
+        let sector6=2.0*PI/6.0;
+        let sid6=fast_floor(a/sector6+0.5);
+        let a6=a-sid6*sector6;
+        let ruin_seed=sid6*17.1;
         let ruin_h=0.55+hash(ruin_seed)*0.65;
         let ruin_lean=0.3*hash(ruin_seed+1.0)-0.15;
-        let ruin_p=V::new(rr-11.5, p0.y+1.25, a6*rr);
+        // ruin_p.x and .z only — y dropped because ruin_pp computes it from p0.y
+        let ruin_p=V::new(rr-11.5, 0.0, a6*rr);
         let base_off=terrain_h(p0.x*(11.5/fmx(rr,0.01)), p0.z*(11.5/fmx(rr,0.01)));
-        let ruin_pp=V::new(ruin_p.x, ruin_p.y-base_off-ruin_h, ruin_p.z);
+        // Old code had p0.y+1.25-base_off-ruin_h; the +1.25 was wrong — it offset
+        // the cylinder centre by 1.25 units above the intended terrain-height anchor.
+        let ruin_pp=V::new(ruin_p.x, p0.y-(base_off+ruin_h), ruin_p.z);
         put(&mut h, sd_cyl_y(rot_z(ruin_pp,ruin_lean), 0.12, ruin_h), 3);
     }
 
@@ -728,7 +742,10 @@ fn shade(ro:V,rd:V,cx:&MapCtx)->V {
     // Precomputed light 1 position: reuse r0 angle (same t*0.7)
     let lp1=V::new(2.6*cx.r0_cx, 2.1, 2.6*cx.r0_sx);
     let lp2=V::new(-2.0, cx.lp2_y, -2.5);
-    let sky_fill_col=sky(n*fmx(n.y,0.0),t)*0.18;
+    // Pass the unit normal (n is already normalised) so sky() samples the correct
+    // direction.  Multiplying by n.y after the call gives the same cosine-weighted
+    // contribution without passing a scaled or zero vector into sky().
+    let sky_fill_col=if n.y>0.0 { sky(n,t)*(0.18*n.y) } else { V::new(0.0,0.0,0.0) };
     let mut col=base*0.06+emit+base*fmx(n.y,0.0)*0.05;
     col=col+V::new(sky_fill_col.x*base.x, sky_fill_col.y*base.y, sky_fill_col.z*base.z);
     for lp in [lp1,lp2] {
@@ -800,14 +817,23 @@ fn shade(ro:V,rd:V,cx:&MapCtx)->V {
     let fog=smoothstep(3.0,16.0,depth);
     let mist=smoothstep(0.5,-0.9,p.y)*0.42;
     let mist_col=V::new(0.038,0.065,0.155);
-    col*(1.0-fog)*(1.0-mist)+sky_col*fog+mist_col*mist+glow*0.6
+    // Sequential fog → mist blend: attenuate both col and sky_col by mist so
+    // fog never adds more energy than the surface already carries at that depth.
+    let c1=col*(1.0-fog)+sky_col*fog;
+    c1*(1.0-mist)+mist_col*mist+glow*0.6
 }
 
 // ── Camera choreography ───────────────────────────────────────────────────────
 
 fn camera(t:f32)->(V,V,V,V) {
-    let act=(t*(1.0/18.0)) as i32 % 5;
-    let k  =smoothstep(0.0,5.0,t-act as f32*18.0);
+    // Compute the current 18s segment and the time offset within it.
+    // Using the raw segment index instead of act*18 prevents the phase
+    // from drifting after the first 90s cycle (when act would wrap to 0
+    // but t would not, making t-act*18 arbitrarily large).
+    let seg  =(t*(1.0/18.0)) as i32;
+    let act  =seg % 5;
+    let local=t - seg as f32*18.0;
+    let k    =smoothstep(0.0,5.0,local);
 
     let (dist,ht,speed)=match act {
         0 => (7.0-k*3.0,  -0.2_f32+k*1.7, 0.07_f32),
@@ -831,7 +857,7 @@ fn camera(t:f32)->(V,V,V,V) {
 // ── Tone mapping ──────────────────────────────────────────────────────────────
 
 fn grade(c:V,t:f32)->V {
-    let progress=t*(1.0/90.0);
+    let progress=clamp(t*(1.0/90.0),0.0,1.0);  // cap at 1 so grading is stable past 90s
     let warm=V::new(1.0+progress*0.07, 1.0, 1.0-progress*0.06);
     let lift=V::new(0.012, 0.012, 0.022);
     let lum=c.x*0.299+c.y*0.587+c.z*0.114;
@@ -864,8 +890,8 @@ fn render_to_fb(w:usize,ph:usize,cx:&MapCtx) {
             let px=((x as f32+0.5)/w as f32*2.0-1.0)*asp;
             let py=1.0-(y as f32+0.5)/ph as f32*2.0;
             let rd=(f*1.35+r*px+u*py).norm();
-            let vign=1.0-0.38*fmn(px*px+py*py,1.0)
-                        -0.12*fmx(fmx(px.abs(),py.abs())-0.75,0.0);
+            let vign=clamp(1.0-0.38*fmn(px*px+py*py,1.0)
+                        -0.12*fmx(fmx(px.abs(),py.abs())-0.75,0.0), 0.0,1.0);
             let raw=shade(ro,rd,cx)*vign;
             let (rv,gv,bv)=tonemap(raw,cx.t);
             let base=(y*w+x)*3;
