@@ -29,7 +29,7 @@ RUSTFLAGS_PROF = \
 SRCS8  = aurora8k.rs sys.rs
 SRCS16 = aurora16k.rs sys.rs
 
-.PHONY: all clean pack run run16 profile8 profile16
+.PHONY: all clean pack run run16 record16 profile8 profile16
 
 # ── Default: smallest uncompressed binary (~8.1 KB, custom minimal ELF) ────────
 all: aurora8k aurora8k_packed aurora16k
@@ -68,8 +68,18 @@ aurora16k: aurora16k_standard
 run: aurora8k
 	./aurora8k
 
+# Stream aurora16k to a GStreamer window (requires gst-launch-1.0 + autovideosink).
+# Resolution must match the W/PH constants in aurora16k.rs (default 320×180).
 run16: aurora16k_standard
-	./aurora16k_standard
+	./aurora16k_standard | gst-launch-1.0 fdsrc fd=0 \
+	  ! video/x-raw,format=RGB,width=320,height=180,framerate=60/1 \
+	  ! videoconvert ! autovideosink
+
+# Record 90 seconds to an MP4 (requires ffmpeg).
+record16: aurora16k_standard
+	./aurora16k_standard | ffmpeg -f rawvideo -pixel_format rgb24 \
+	  -video_size 320x180 -framerate 30 -i pipe:0 \
+	  -vf scale=1280:720 -c:v libx264 -crf 18 aurora16k.mp4
 
 # ── Flamegraph profiling (requires ~/.cargo/bin/flamegraph + perf) ─────────────
 # Build with debug symbols (no strip) then capture a flamegraph SVG.
@@ -96,4 +106,5 @@ clean:
 	      aurora16k aurora16k_standard \
 	      aurora8k_prof aurora16k_prof \
 	      flamegraph8k.svg flamegraph16k.svg perf.data \
+	      aurora16k.mp4 \
 	      librust_out.rmeta *.rcgu.o
