@@ -57,7 +57,9 @@ impl Neg for V { type Output=Self; fn neg(self)->Self{Self::new(-self.x,-self.y,
 fn clamp(x: f32, a: f32, b: f32) -> f32 { fmn(fmx(x, a), b) }
 fn mix(a: f32, b: f32, t: f32)   -> f32 { a + (b-a)*t }
 fn hash(n: f32) -> f32 {
-    let b = n.to_bits().wrapping_mul(0x9e3779b9);
+    let b = n.to_bits()
+        .wrapping_add(0x7f4a7c15)   // break hash(0.0)=0 fixed point
+        .wrapping_mul(0x9e3779b9);
     (b >> 9) as f32 * (1.0 / 8388608.0)
 }
 fn rep(x: f32, c: f32) -> f32 {
@@ -120,7 +122,7 @@ fn map(p0: V, t: f32) -> Hit {
     let a  = p0.z.atan2(p0.x);
     let rr = (p0.x*p0.x + p0.z*p0.z).sqrt();
     let aa = rep(a, 2.0*PI/8.0);
-    let q  = V::new(rr-2.35, p0.y, aa*rr);
+    let q  = V::new(rr-2.35, p0.y + 0.10, aa*rr);  // +0.10: sphere cap bottom reaches floor at y=-1.25
     let shaft = sd_cyl_y(q, 0.07, 1.1);
     let qc  = V::new(q.x, q.y.abs() - 1.04, q.z);
     let cap = qc.len() - 0.11;
@@ -194,7 +196,7 @@ fn shade(ro: V, rd: V, t: f32) -> V {
         let h = map(p, t);
         glow = glow + V::new(0.8, 0.55, 1.0) * (0.002 / (0.015 + h.d.abs()));
         if h.d < 0.0015*(1.0 + depth*0.12) { mat = h.m; break; }
-        depth += clamp(h.d, 0.006, 0.45);
+        depth += clamp(h.d * 0.80, 0.006, 0.35);  // 0.8× guard: map() is not a strict SDF
         if depth > 18.0 || i == 75 { return sky_col + glow*0.55; }
     }
 
@@ -211,7 +213,7 @@ fn shade(ro: V, rd: V, t: f32) -> V {
         let spec = pow32(clamp(r.dot(-rd), 0.0, 1.0));
         col = col + base*dif + V::new(1.0,0.95,0.8)*spec*(0.55+0.45*dif);
     }
-    let fr = fmx(1.0 + n.dot(rd), 0.0);
+    let fr = clamp(1.0 + n.dot(rd), 0.0, 1.0);  // clamp: overshoot landing can give n·rd>0 → fres>1
     let fres = fr * fr * fr;
     col = col*ao(p,n,t) + V::new(0.25,0.85,1.0)*fres;
     let fog = clamp((depth - 3.0) * (1.0/12.0), 0.0, 1.0);

@@ -183,6 +183,7 @@ pub fn elapsed(start: &Timespec) -> f32 {
     (now.sec - start.sec) as f32 + (now.nsec - start.nsec) as f32 * 1e-9
 }
 
+#[allow(dead_code)]
 pub fn sleep_ms(ms: u64) {
     let ts = Timespec { sec: 0, nsec: (ms * 1_000_000) as i64 };
     unsafe { sys2(35 /* SYS_nanosleep */, &ts as *const _ as i64, 0); }
