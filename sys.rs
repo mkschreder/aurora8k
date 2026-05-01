@@ -151,8 +151,9 @@ core::arch::global_asm!(
 );
 
 #[no_mangle]
-unsafe extern "C" fn aurora_entry(_argc: i64, _argv: *const *const u8) -> i32 {
-    crate::run(90.0);
+unsafe extern "C" fn aurora_entry(argc: i64, _argv: *const *const u8) -> i32 {
+    // Any argument (e.g. "record") enables deterministic fixed-step mode in aurora16k.
+    crate::run(90.0, argc > 1);
     0
 }
 
@@ -220,18 +221,27 @@ pub fn term_size() -> (usize, usize) {
 // 2 MiB is ample for the largest ANSI/sixel frame aurora8k can produce.
 static mut BUF: [u8; 1 << 21] = [0u8; 1 << 21];
 
-/// Write `len` bytes from `ptr` to stdout (fd 1).
+/// Write all `len` bytes from `ptr` to stdout (fd 1), retrying short writes.
 #[allow(dead_code)]
-pub unsafe fn write_raw(ptr: *const u8, len: usize) {
-    core::arch::asm!(
-        "syscall",
-        inlateout("rax") 1_i64 => _,
-        in("rdi") 1_i64,
-        in("rsi") ptr,
-        in("rdx") len,
-        lateout("rcx") _, lateout("r11") _,
-        options(nostack)
-    );
+pub unsafe fn write_raw(mut ptr: *const u8, mut len: usize) {
+    while len > 0 {
+        let n: i64;
+        core::arch::asm!(
+            "syscall",
+            inlateout("rax") 1_i64 => n,
+            in("rdi") 1_i64,
+            in("rsi") ptr,
+            in("rdx") len,
+            lateout("rcx") _, lateout("r11") _,
+            options(nostack)
+        );
+        if n <= 0 {
+            return;
+        }
+        let u = n as usize;
+        ptr = ptr.add(u);
+        len -= u;
+    }
 }
 
 /// Write-only byte buffer backed by the static BSS region.

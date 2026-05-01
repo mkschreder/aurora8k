@@ -10,9 +10,9 @@
 //            ! rawvideoparse width=320 height=180 format=rgb framerate=60/1 \
 //            ! videoconvert ! autovideosink sync=false
 //          (rawvideoparse is required so videoconvert can map frames; fdsrc+caps alone fails.)
-// Or record to file:
-//   ./aurora16k | ffmpeg -f rawvideo -pixel_format rgb24 -video_size 320x180 \
-//                        -i pipe:0 -vf scale=1280:720 out.mp4
+// Or record (see Makefile record16; use -framerate ~1/<seconds-per-frame>, not 30):
+//   ./aurora16k | ffmpeg -f rawvideo -pixel_format rgb24 -video_size 320x180 -framerate 1/15 \
+//                        -i pipe:0 -vf scale=1280:720 -c:v libx264 -crf 18 out.mp4
 //
 // Linux x86-64 only.  No GPU, no libc, no crates.  Raw syscalls via sys.rs.
 
@@ -892,7 +892,7 @@ fn tonemap(c:V,t:f32)->(u8,u8,u8) {
 //       ! videoconvert ! autovideosink sync=false
 //
 //   ./aurora16k | ffmpeg -f rawvideo -pixel_format rgb24 -video_size 320x180 \
-//                        -framerate 30 -i pipe:0 -vf scale=1280:720 out.mp4
+//                        -framerate 1/15 -i pipe:0 -vf scale=1280:720 -c:v libx264 out.mp4
 
 /// Raytrace every pixel into the static BSS framebuffer.
 fn render_to_fb(cx: &MapCtx) {
@@ -920,13 +920,17 @@ fn render_to_fb(cx: &MapCtx) {
 
 // ── Main loop ─────────────────────────────────────────────────────────────────
 
-pub(crate) fn run(seconds: f32) {
+pub(crate) fn run(seconds: f32, record: bool) {
     let start = clock_monotonic();
+    let mut frame_t = 0.0_f32;
     loop {
-        let t = elapsed(&start);
+        // record mode: fixed 1/30 s steps — every animation frame captured, no skipping.
+        // live mode: wall-clock time — animation runs at real speed regardless of render rate.
+        let t = if record { frame_t } else { elapsed(&start) };
         if t > seconds { break; }
         let cx = MapCtx::new(t);
         render_to_fb(&cx);
         unsafe { write_raw(FRAMEBUF.as_ptr(), W * PH * 3); }
+        if record { frame_t += 1.0 / 30.0; }
     }
 }

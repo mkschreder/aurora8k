@@ -280,7 +280,7 @@ fn render(w: usize, h: usize, t: f32, out: &mut Out) {
 
 // ── Main loop ─────────────────────────────────────────────────────────────────
 
-pub(crate) fn run(seconds: f32) {
+pub(crate) fn run(seconds: f32, _record: bool) {
     let _term = Term::enter();
     let start = clock_monotonic();
     let mut frame = Out(0);

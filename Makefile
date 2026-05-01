@@ -30,8 +30,6 @@ SRCS8  = aurora8k.rs sys.rs
 SRCS16 = aurora16k.rs sys.rs
 
 # Must match W, PH in aurora16k.rs.
-# fdsrc + caps alone does not attach GstVideo metadata; videoconvert then
-# fails to map buffers ("invalid video buffer").  rawvideoparse frames the stream.
 AURORA16_W := 320
 AURORA16_H := 180
 
@@ -80,14 +78,19 @@ run: aurora8k
 #   ./aurora16k_standard | gst-launch-1.0 fdsrc fd=0 do-timestamp=true \
 #     ! rawvideoparse width=$(AURORA16_W) height=$(AURORA16_H) format=rgb \
 #     ! videoconvert ! autovideosink sync=false
+# ffplay blocks until the first full RGB frame (~15–40 s of CPU raytracing typical).
 run16: aurora16k_standard
+	@echo "run16: first picture may take ~15–40 s (full-frame CPU trace)."
 	./aurora16k_standard | ffplay -f rawvideo -pixel_format rgb24 \
 	  -video_size $(AURORA16_W)x$(AURORA16_H) -i pipe:0 \
 	  -vf scale=1280:720
 
-# Record 90 seconds to an MP4 (requires ffmpeg).
+# Record the full 90 s animation to MP4 (requires ffmpeg).
+# Passes "record" as argv[1] so aurora16k uses fixed 1/30 s steps: every
+# animation frame is rendered and captured in order, no matter how long each
+# frame takes.  ffmpeg receives exactly 30 frames per animation-second.
 record16: aurora16k_standard
-	./aurora16k_standard | ffmpeg -f rawvideo -pixel_format rgb24 \
+	./aurora16k_standard record | ffmpeg -f rawvideo -pixel_format rgb24 \
 	  -video_size $(AURORA16_W)x$(AURORA16_H) -framerate 30 -i pipe:0 \
 	  -vf scale=1280:720 -c:v libx264 -crf 18 aurora16k.mp4
 
