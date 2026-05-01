@@ -3058,6 +3058,3 @@ The geometry is not loaded.
 The geometry is not stored.
 
 The geometry is computed on demand, for every pixel, every frame.
-
-```
-```
