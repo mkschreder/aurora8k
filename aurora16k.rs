@@ -7,8 +7,9 @@
 // Build:   make aurora16k          (UPX packed, ≤16 KB)
 //          make aurora16k_standard  (uncompressed for measurement)
 // Run:     ./aurora16k | gst-launch-1.0 fdsrc fd=0 \
-//            ! video/x-raw,format=RGB,width=320,height=180,framerate=60/1 \
-//            ! videoconvert ! autovideosink
+//            ! rawvideoparse width=320 height=180 format=rgb framerate=60/1 \
+//            ! videoconvert ! autovideosink sync=false
+//          (rawvideoparse is required so videoconvert can map frames; fdsrc+caps alone fails.)
 // Or record to file:
 //   ./aurora16k | ffmpeg -f rawvideo -pixel_format rgb24 -video_size 320x180 \
 //                        -i pipe:0 -vf scale=1280:720 out.mp4
@@ -887,8 +888,8 @@ fn tonemap(c:V,t:f32)->(u8,u8,u8) {
 // Pipe stdout to GStreamer or ffmpeg:
 //
 //   ./aurora16k | gst-launch-1.0 fdsrc fd=0 \
-//       ! video/x-raw,format=RGB,width=320,height=180,framerate=60/1 \
-//       ! videoconvert ! autovideosink
+//       ! rawvideoparse width=320 height=180 format=rgb framerate=60/1 \
+//       ! videoconvert ! autovideosink sync=false
 //
 //   ./aurora16k | ffmpeg -f rawvideo -pixel_format rgb24 -video_size 320x180 \
 //                        -framerate 30 -i pipe:0 -vf scale=1280:720 out.mp4
