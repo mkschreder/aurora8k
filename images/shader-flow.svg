@@ -1,0 +1,65 @@
+<svg width="900" height="760" viewBox="0 0 900 760" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="arr2" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L9,3 z" fill="#222"/>
+    </marker>
+    <style>
+      .box { fill:#f8f8ff; stroke:#222; stroke-width:1.5; rx:10; }
+      .math { fill:#eef8ff; stroke:#1c638a; stroke-width:1.5; rx:10; }
+      .scene { fill:#fff4e8; stroke:#9a6515; stroke-width:1.5; rx:10; }
+      .light { fill:#f2fff0; stroke:#33813a; stroke-width:1.5; rx:10; }
+      .txt { font-family:monospace; font-size:14px; fill:#111; }
+      .small { font-family:monospace; font-size:12px; fill:#333; }
+      .arrow { stroke:#222; stroke-width:1.5; marker-end:url(#arr2); fill:none; }
+    </style>
+  </defs>
+
+  <rect x="330" y="20" width="240" height="70" class="box"/>
+  <text x="355" y="50" class="txt">main()</text>
+  <text x="355" y="72" class="small">per fragment / per pixel</text>
+
+  <rect x="80" y="140" width="220" height="80" class="math"/>
+  <text x="105" y="170" class="txt">makeCtx()</text>
+  <text x="105" y="195" class="small">precompute sin/cos</text>
+
+  <rect x="340" y="140" width="220" height="80" class="math"/>
+  <text x="365" y="170" class="txt">cam_()</text>
+  <text x="365" y="195" class="small">camera basis</text>
+
+  <rect x="600" y="140" width="220" height="80" class="math"/>
+  <text x="625" y="170" class="txt">screen ray</text>
+  <text x="625" y="195" class="small">rd = f*1.35+r*px+u*py</text>
+
+  <rect x="340" y="280" width="220" height="80" class="scene"/>
+  <text x="365" y="310" class="txt">shade_(ro, rd)</text>
+  <text x="365" y="335" class="small">raymarch and shade</text>
+
+  <rect x="80" y="420" width="220" height="90" class="scene"/>
+  <text x="105" y="450" class="txt">map_(p)</text>
+  <text x="105" y="475" class="small">distance + material</text>
+  <text x="105" y="495" class="small">terrain, temple, forest</text>
+
+  <rect x="340" y="420" width="220" height="90" class="light"/>
+  <text x="365" y="450" class="txt">norm_, shad_, ao_</text>
+  <text x="365" y="475" class="small">normals, shadows</text>
+  <text x="365" y="495" class="small">ambient occlusion</text>
+
+  <rect x="600" y="420" width="220" height="90" class="light"/>
+  <text x="625" y="450" class="txt">pal_, sky_</text>
+  <text x="625" y="475" class="small">materials, sky</text>
+  <text x="625" y="495" class="small">stars, moon, aurora</text>
+
+  <rect x="340" y="600" width="220" height="80" class="box"/>
+  <text x="365" y="630" class="txt">tone map</text>
+  <text x="365" y="655" class="small">vignette, contrast, gamma</text>
+
+  <path d="M450,90 L190,140" class="arrow"/>
+  <path d="M450,90 L450,140" class="arrow"/>
+  <path d="M450,90 L710,140" class="arrow"/>
+  <path d="M450,220 L450,280" class="arrow"/>
+  <path d="M710,220 L500,280" class="arrow"/>
+  <path d="M340,320 L300,440" class="arrow"/>
+  <path d="M450,360 L450,420" class="arrow"/>
+  <path d="M560,320 L650,420" class="arrow"/>
+  <path d="M450,510 L450,600" class="arrow"/>
+</svg>

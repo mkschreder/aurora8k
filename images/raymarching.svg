@@ -1,0 +1,34 @@
+<svg width="900" height="380" viewBox="0 0 900 380" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="arr3" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L9,3 z" fill="#333"/>
+    </marker>
+    <style>
+      .ray { stroke:#333; stroke-width:2; marker-end:url(#arr3); }
+      .step { stroke:#1f77b4; stroke-width:2; stroke-dasharray:4 3; }
+      .circle { fill:none; stroke:#1f77b4; stroke-width:1.5; opacity:.5; }
+      .surface { fill:#ddd; stroke:#111; stroke-width:2; }
+      .txt { font-family:monospace; font-size:13px; fill:#111; }
+    </style>
+  </defs>
+
+  <path class="surface" d="M650,80 C770,120 790,260 660,310 C570,350 475,300 500,200 C520,120 580,65 650,80z"/>
+  <line x1="80" y1="250" x2="810" y2="115" class="ray"/>
+
+  <circle cx="120" cy="243" r="100" class="circle"/>
+  <circle cx="315" cy="207" r="80" class="circle"/>
+  <circle cx="470" cy="178" r="48" class="circle"/>
+  <circle cx="565" cy="160" r="26" class="circle"/>
+  <circle cx="615" cy="151" r="11" class="circle"/>
+
+  <circle cx="120" cy="243" r="5" fill="#1f77b4"/>
+  <circle cx="315" cy="207" r="5" fill="#1f77b4"/>
+  <circle cx="470" cy="178" r="5" fill="#1f77b4"/>
+  <circle cx="565" cy="160" r="5" fill="#1f77b4"/>
+  <circle cx="615" cy="151" r="5" fill="#1f77b4"/>
+
+  <text x="65" y="280" class="txt">ro</text>
+  <text x="145" y="225" class="txt">step by SDF distance</text>
+  <text x="510" y="140" class="txt">steps shrink near surface</text>
+  <text x="640" y="150" class="txt">hit</text>
+</svg>

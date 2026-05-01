@@ -1,0 +1,20 @@
+<svg width="900" height="360" viewBox="0 0 900 360" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    .ground { fill:none; stroke:#333; stroke-width:3; }
+    .flat { fill:#eaf7ff; opacity:.7; stroke:#247; stroke-width:1; }
+    .forest { fill:#eaffea; opacity:.7; stroke:#272; stroke-width:1; }
+    .txt { font-family:monospace; font-size:13px; fill:#111; }
+    .dash { stroke:#777; stroke-dasharray:5 4; }
+  </style>
+
+  <path class="ground" d="M40,230 C130,230 210,230 300,230 C350,220 390,210 440,225 C500,250 540,170 600,200 C670,240 720,150 860,185"/>
+  <rect x="210" y="80" width="270" height="190" class="flat"/>
+  <rect x="480" y="80" width="360" height="190" class="forest"/>
+  <line x1="300" y1="70" x2="300" y2="285" class="dash"/>
+  <line x1="480" y1="70" x2="480" y2="285" class="dash"/>
+
+  <text x="250" y="55" class="txt">flat temple clearing</text>
+  <text x="555" y="55" class="txt">rolling forest terrain</text>
+  <text x="300" y="305" class="txt">smoothstep transition</text>
+  <text x="40" y="255" class="txt">y = terrain_h(x,z)</text>
+</svg>

@@ -1,0 +1,41 @@
+<svg width="900" height="760" viewBox="0 0 900 760" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    .ring { fill:none; stroke:#333; stroke-width:1.5; }
+    .dash { fill:none; stroke:#777; stroke-width:1; stroke-dasharray:6 4; }
+    .crystal { fill:#d8b8ff; stroke:#6b2fb3; stroke-width:1.5; }
+    .water { fill:#aee9ff; stroke:#187ca0; stroke-width:1.5; opacity:.75; }
+    .forest { fill:#c9efc9; stroke:#267326; stroke-width:1.5; opacity:.55; }
+    .stone { fill:#e8d5a5; stroke:#8a6821; stroke-width:1.5; }
+    .txt { font-family:monospace; font-size:13px; fill:#111; }
+  </style>
+
+  <circle cx="450" cy="380" r="35" class="crystal"/>
+  <text x="405" y="385" class="txt">crystal</text>
+
+  <circle cx="450" cy="380" r="85" class="dash"/>
+  <text x="520" y="320" class="txt">inner runes</text>
+
+  <circle cx="450" cy="380" r="128" class="water"/>
+  <circle cx="450" cy="380" r="96" fill="white" opacity=".6"/>
+  <text x="545" y="390" class="txt">water ring</text>
+
+  <circle cx="450" cy="380" r="170" class="ring"/>
+  <text x="580" y="275" class="txt">8 columns</text>
+
+  <circle cx="450" cy="380" r="245" class="ring"/>
+  <text x="620" y="210" class="txt">4 gateways</text>
+
+  <circle cx="450" cy="380" r="315" class="ring"/>
+  <text x="645" y="145" class="txt">standing stones</text>
+
+  <circle cx="450" cy="380" r="365" class="forest"/>
+  <circle cx="450" cy="380" r="210" fill="white" opacity=".8"/>
+  <text x="185" y="110" class="txt">forest annulus</text>
+
+  <circle cx="450" cy="380" r="55" class="dash"/>
+  <circle cx="450" cy="380" r="115" class="dash"/>
+  <circle cx="450" cy="380" r="160" class="dash"/>
+  <circle cx="450" cy="380" r="250" class="dash"/>
+
+  <text x="390" y="720" class="txt">top-down conceptual layout</text>
+</svg>

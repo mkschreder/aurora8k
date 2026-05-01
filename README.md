@@ -230,11 +230,11 @@ This asks EGL for the default display and selects the OpenGL API.
 Then it chooses a config:
 
 ```rust
-let cfg_attrs: [i32; 9] = [
+let cfg_attrs: [i32; 7] = [
     EGL_SURFACE_TYPE,    EGL_PBUFFER_BIT,
     EGL_RENDERABLE_TYPE, EGL_OPENGL_BIT,
     EGL_DEPTH_SIZE,      0,
-    EGL_NONE, 0, 0,
+    EGL_NONE,
 ];
 ```
 
@@ -308,21 +308,6 @@ unsafe fn compile(src: &[u8], kind: u32) -> u32 {
 The shader source is passed directly as bytes plus length.
 
 This means the shader does not need to be null-terminated.
-
-Compilation errors are read and written to stderr:
-
-```rust
-glGetShaderiv(sh, 0x8B81 /*GL_COMPILE_STATUS*/, &mut ok);
-if ok == 0 {
-    let mut log = [0u8; 1024];
-    let mut n: i32 = 0;
-    glGetShaderInfoLog(sh, 1024, &mut n, log.as_mut_ptr());
-    write_stderr(log.as_ptr(), n as usize);
-    write_stderr(b"\n".as_ptr(), 1);
-}
-```
-
-That is important in a shader-heavy intro because a tiny syntax error otherwise gives a black screen with little context.
 
 The shaders are embedded with:
 
@@ -1219,7 +1204,6 @@ smin(
     length(p) - .72,
     .18
 )
-+ .025 * sin(p.x * 13.) * sin(p.y * 11. + T) * sin(p.z * 9.)
 ```
 
 It consists of:
@@ -1902,7 +1886,7 @@ for (int i = 0; i < 5; i++) {
 
     h = hitp(
         h,
-        length(vec3(fq.x, fq.y * 1.55, fq.z)) - fr,
+        length(vec3(fq.x, fq.y * .8, fq.z)) - fr,
         7.
     );
 }
@@ -1913,10 +1897,10 @@ The foliage is a stack of five vertically arranged ellipsoid-like blobs.
 The distance expression:
 
 ```glsl
-length(vec3(fq.x, fq.y * 1.55, fq.z)) - fr
+length(vec3(fq.x, fq.y * .8, fq.z)) - fr
 ```
 
-scales Y before measuring length. That makes the blob vertically compressed or stretched depending on interpretation. Because `fq.y` is multiplied by `1.55`, the shape becomes flatter vertically than a sphere.
+scales Y before measuring length. Because `fq.y` is multiplied by `0.8` (< 1), the blob is slightly taller than wide — a compact prolate shape that suits conifers. Crucially, a scale factor less than 1 keeps the SDF gradient magnitude below 1 in the y-direction, preserving the conservative distance bound required for correct sphere tracing.
 
 The radius `fr` decreases for higher layers:
 

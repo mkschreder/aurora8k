@@ -1,0 +1,59 @@
+<svg width="900" height="900" viewBox="0 0 900 900" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="arr4" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L9,3 z" fill="#222"/>
+    </marker>
+    <style>
+      .box { fill:#f9f9ff; stroke:#222; stroke-width:1.4; rx:10; }
+      .scene { fill:#fff6e8; stroke:#916412; stroke-width:1.4; rx:10; }
+      .light { fill:#efffed; stroke:#227a2d; stroke-width:1.4; rx:10; }
+      .post { fill:#f0f6ff; stroke:#275c9a; stroke-width:1.4; rx:10; }
+      .txt { font-family:monospace; font-size:13px; fill:#111; }
+      .small { font-family:monospace; font-size:11px; fill:#333; }
+      .arrow { stroke:#222; stroke-width:1.4; marker-end:url(#arr4); fill:none; }
+    </style>
+  </defs>
+
+  <rect x="330" y="20" width="240" height="60" class="box"/>
+  <text x="355" y="55" class="txt">pixel gl_FragCoord</text>
+
+  <rect x="330" y="120" width="240" height="70" class="box"/>
+  <text x="355" y="150" class="txt">screen coords px, py</text>
+  <text x="355" y="170" class="small">aspect corrected</text>
+
+  <rect x="330" y="230" width="240" height="80" class="box"/>
+  <text x="355" y="260" class="txt">camera ray</text>
+  <text x="355" y="282" class="small">rd = normalize(f*1.35+r*px+u*py)</text>
+
+  <rect x="330" y="360" width="240" height="80" class="scene"/>
+  <text x="355" y="390" class="txt">raymarch shade_()</text>
+  <text x="355" y="412" class="small">loop up to 80 steps</text>
+
+  <rect x="60" y="500" width="220" height="80" class="scene"/>
+  <text x="85" y="530" class="txt">map_()</text>
+  <text x="85" y="552" class="small">nearest distance + material</text>
+
+  <rect x="340" y="500" width="220" height="80" class="light"/>
+  <text x="365" y="530" class="txt">surface shading</text>
+  <text x="365" y="552" class="small">normal, AO, shadow, lights</text>
+
+  <rect x="620" y="500" width="220" height="80" class="light"/>
+  <text x="645" y="530" class="txt">environment</text>
+  <text x="645" y="552" class="small">sky, fog, mist, glow</text>
+
+  <rect x="330" y="650" width="240" height="80" class="post"/>
+  <text x="355" y="680" class="txt">post color</text>
+  <text x="355" y="702" class="small">vignette, warm, contrast</text>
+
+  <rect x="330" y="780" width="240" height="60" class="post"/>
+  <text x="355" y="815" class="txt">O = vec4(color, 1)</text>
+
+  <path d="M450,80 L450,120" class="arrow"/>
+  <path d="M450,190 L450,230" class="arrow"/>
+  <path d="M450,310 L450,360" class="arrow"/>
+  <path d="M390,440 L190,500" class="arrow"/>
+  <path d="M450,440 L450,500" class="arrow"/>
+  <path d="M510,440 L730,500" class="arrow"/>
+  <path d="M450,580 L450,650" class="arrow"/>
+  <path d="M450,730 L450,780" class="arrow"/>
+</svg>

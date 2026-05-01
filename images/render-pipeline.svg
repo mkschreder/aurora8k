@@ -1,0 +1,58 @@
+<svg width="920" height="520" viewBox="0 0 920 520" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L9,3 z" fill="#333"/>
+    </marker>
+    <style>
+      .box { fill:#f7f7fb; stroke:#222; stroke-width:1.5; rx:10; }
+      .gpu { fill:#eef8ff; stroke:#1b5d89; stroke-width:1.5; rx:10; }
+      .cpu { fill:#fff7e8; stroke:#9b6b16; stroke-width:1.5; rx:10; }
+      .out { fill:#eef9ee; stroke:#2d7d35; stroke-width:1.5; rx:10; }
+      .txt { font-family:monospace; font-size:14px; fill:#111; }
+      .small { font-family:monospace; font-size:12px; fill:#333; }
+      .arrow { stroke:#333; stroke-width:1.5; marker-end:url(#arrow); fill:none; }
+    </style>
+  </defs>
+
+  <rect x="30" y="40" width="220" height="100" class="cpu"/>
+  <text x="50" y="70" class="txt">Rust no_std host</text>
+  <text x="50" y="95" class="small">EGL pbuffer</text>
+  <text x="50" y="115" class="small">OpenGL 3.3 Core</text>
+
+  <rect x="350" y="40" width="230" height="100" class="gpu"/>
+  <text x="370" y="70" class="txt">Shader program</text>
+  <text x="370" y="95" class="small">fullscreen triangle</text>
+  <text x="370" y="115" class="small">fragment shader per pixel</text>
+
+  <rect x="670" y="40" width="210" height="100" class="gpu"/>
+  <text x="690" y="70" class="txt">Framebuffer</text>
+  <text x="690" y="95" class="small">640 x 360</text>
+  <text x="690" y="115" class="small">RGB pixels</text>
+
+  <rect x="350" y="220" width="230" height="120" class="gpu"/>
+  <text x="370" y="250" class="txt">Fragment shader</text>
+  <text x="370" y="275" class="small">camera ray</text>
+  <text x="370" y="295" class="small">raymarch map_()</text>
+  <text x="370" y="315" class="small">shade_()</text>
+
+  <rect x="670" y="220" width="210" height="120" class="cpu"/>
+  <text x="690" y="250" class="txt">glReadPixels</text>
+  <text x="690" y="275" class="small">bottom-to-top rows</text>
+  <text x="690" y="295" class="small">FRAMEBUF</text>
+  <text x="690" y="315" class="small">then row flip</text>
+
+  <rect x="350" y="400" width="230" height="80" class="cpu"/>
+  <text x="370" y="430" class="txt">stdout raw RGB24</text>
+  <text x="370" y="455" class="small">write_raw(FLIPBUF)</text>
+
+  <rect x="670" y="400" width="210" height="80" class="out"/>
+  <text x="690" y="430" class="txt">ffplay / ffmpeg</text>
+  <text x="690" y="455" class="small">preview or encode</text>
+
+  <path d="M250,90 L350,90" class="arrow"/>
+  <path d="M580,90 L670,90" class="arrow"/>
+  <path d="M465,140 L465,220" class="arrow"/>
+  <path d="M580,280 L670,280" class="arrow"/>
+  <path d="M775,340 L775,380 L580,440" class="arrow"/>
+  <path d="M580,440 L670,440" class="arrow"/>
+</svg>
