@@ -17,8 +17,11 @@ mod sys;
 
 use core::f32::consts::PI;
 use core::ops::{Add, Div, Mul, Neg, Sub};
-use sys::{F32Ext, Out, Term, clock_monotonic, elapsed, fast_floor,
+use sys::{F32Ext, Out, Term, alloc_anon, clock_monotonic, elapsed, fast_floor,
           term_size};
+
+// Pixel framebuffer: RGB bytes written by render_to_fb, read by fb_to_sixel.
+static mut FB_PTR: *mut u8 = core::ptr::null_mut();
 
 // ── Min / max / pow ───────────────────────────────────────────────────────────
 
@@ -846,58 +849,89 @@ fn tonemap(c:V,t:f32)->(u8,u8,u8) {
 
 // ── Frame builder ─────────────────────────────────────────────────────────────
 
-fn push_u8(out:&mut Out,v:u8) {
-    if v>=100 { out.push(b'0'+v/100); }
-    if v>=10  { out.push(b'0'+(v/10)%10); }
+/// Output a percentage value 0-100 as decimal (max 2 digits).
+fn push_pct(out:&mut Out,v:u8) {
+    if v>=10 { out.push(b'0'+v/10); }
     out.push(b'0'+v%10);
 }
 
-fn render(w:usize,h:usize,cx:&MapCtx,out:&mut Out) {
-    out.push_str("\x1b[H");
-    let t=cx.t;
-    let pix_h=h*2;
-    let asp=w as f32/pix_h as f32;
-    let (ro,f,r,u)=camera(t);
-
-    for y in 0..h {
+/// Phase 1: raytrace every pixel into the RGB framebuffer.
+fn render_to_fb(w:usize,ph:usize,cx:&MapCtx) {
+    let asp=w as f32/ph as f32;
+    let (ro,f,r,u)=camera(cx.t);
+    for y in 0..ph {
         for x in 0..w {
-            let mut rgb=[(0_u8,0_u8,0_u8);2];
-            for sy in 0..2 {
-                let yy=y*2+sy;
-                let px=((x as f32+0.5)/w as f32*2.0-1.0)*asp;
-                let py=1.0-(yy as f32+0.5)/pix_h as f32*2.0;
-                let rd=(f*1.35+r*px+u*py).norm();
-                let vign=1.0-0.38*fmn(px*px+py*py,1.0)
-                            -0.12*fmx(fmx(px.abs(),py.abs())-0.75,0.0);
-                let raw=shade(ro,rd,cx)*vign;
-                rgb[sy]=tonemap(raw,t);
+            let px=((x as f32+0.5)/w as f32*2.0-1.0)*asp;
+            let py=1.0-(y as f32+0.5)/ph as f32*2.0;
+            let rd=(f*1.35+r*px+u*py).norm();
+            let vign=1.0-0.38*fmn(px*px+py*py,1.0)
+                        -0.12*fmx(fmx(px.abs(),py.abs())-0.75,0.0);
+            let raw=shade(ro,rd,cx)*vign;
+            let (rv,gv,bv)=tonemap(raw,cx.t);
+            let base=(y*w+x)*3;
+            unsafe {
+                FB_PTR.add(base).write(rv);
+                FB_PTR.add(base+1).write(gv);
+                FB_PTR.add(base+2).write(bv);
             }
-            let (r1,g1,b1)=rgb[0]; let (r2,g2,b2)=rgb[1];
-            out.push_str("\x1b[38;2;"); push_u8(out,r1); out.push(b';');
-                                        push_u8(out,g1); out.push(b';');
-                                        push_u8(out,b1);
-            out.push_str("m\x1b[48;2;"); push_u8(out,r2); out.push(b';');
-                                          push_u8(out,g2); out.push(b';');
-                                          push_u8(out,b2);
-            out.push_str("m\u{2580}");
         }
-        out.push_str("\x1b[0m\n");
     }
+}
+
+/// Phase 2: encode the RGB framebuffer as DEC sixel graphics.
+///
+/// Each sixel character encodes a 1-column × 6-row strip.  We make six
+/// passes per sixel band so every pixel row gets its own colour definition
+/// before the matching row-bit is drawn.  The colour slot (#0) is redefined
+/// for each pixel; terminals that implement early-binding (DEC-standard)
+/// display each pixel in the colour that was active when it was drawn.
+fn fb_to_sixel(w:usize,ph:usize,out:&mut Out) {
+    out.push_str("\x1b[H\x1bPq");          // home cursor, start sixel DCS
+    let bands=ph/6;
+    for band in 0..bands {
+        for r in 0..6_usize {
+            let y=band*6+r;
+            let sc=b'?'+(1_u8<<r);         // sixel char: only bit r set
+            for x in 0..w {
+                unsafe {
+                    let p=FB_PTR.add((y*w+x)*3);
+                    let rv=*p; let gv=*p.add(1); let bv=*p.add(2);
+                    // Convert 0-255 → 0-100 for sixel colour parameters
+                    let rp=(rv as u16*100/255) as u8;
+                    let gp=(gv as u16*100/255) as u8;
+                    let bp=(bv as u16*100/255) as u8;
+                    out.push_str("#0;2;");
+                    push_pct(out,rp); out.push(b';');
+                    push_pct(out,gp); out.push(b';');
+                    push_pct(out,bp);
+                    out.push(sc);
+                }
+            }
+            out.push(b'$');                // sixel carriage-return within band
+        }
+        out.push(b'-');                    // advance to next sixel band
+    }
+    out.push_str("\x1b\\");               // String Terminator
 }
 
 // ── Main loop ─────────────────────────────────────────────────────────────────
 
 pub(crate) fn run(seconds:f32) {
     let _term=Term::enter();
+    // 512 KB pixel framebuffer: enough for up to ~300×170×3 bytes.
+    unsafe { FB_PTR=alloc_anon(1<<19); }
     let start=clock_monotonic();
     let mut frame=Out(0);
     loop {
         let t=elapsed(&start);
         if t>seconds { break; }
         let (w,h)=term_size();
+        // Round pixel height down to a multiple of 6 for complete sixel bands.
+        let ph=(h*2/6)*6;
         let cx=MapCtx::new(t);
         frame.clear();
-        render(w,h,&cx,&mut frame);
+        render_to_fb(w,ph,&cx);
+        fb_to_sixel(w,ph,&mut frame);
         frame.flush();
     }
 }
