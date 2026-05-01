@@ -45,21 +45,6 @@ unsafe fn sys3(n: i64, a1: i64, a2: i64, a3: i64) -> i64 {
     ret
 }
 
-#[inline(always)]
-unsafe fn sys6(n: i64, a1: i64, a2: i64, a3: i64, a4: i64, a5: i64, a6: i64) -> i64 {
-    let ret: i64;
-    core::arch::asm!(
-        "mov r10, rcx",
-        "syscall",
-        inlateout("rax") n => ret,
-        in("rdi") a1, in("rsi") a2, in("rdx") a3,
-        in("rcx") a4, in("r8")  a5, in("r9")  a6,
-        lateout("r11") _,
-        options(nostack)
-    );
-    ret
-}
-
 /// Floor via integer truncation — avoids floorf PLT call.
 /// Correct for |x| < 2^31 (all our use cases stay well within this range).
 #[inline(always)]
@@ -135,7 +120,21 @@ pub struct Timespec {
 }
 
 #[repr(C)]
-struct Winsize { row: u16, col: u16, _xp: u16, _yp: u16 }
+struct Winsize {
+    row: u16,
+    col: u16,
+    xpixel: u16,
+    ypixel: u16,
+}
+
+/// Result of [`term_winsize`] / `TIOCGWINSZ` (character grid + drawable pixel dims).
+#[repr(C)]
+pub struct TermWinsize {
+    pub row: u16,
+    pub col: u16,
+    pub xpixel: u16,
+    pub ypixel: u16,
+}
 
 // ── Process entry point ───────────────────────────────────────────────────────
 
@@ -153,7 +152,6 @@ core::arch::global_asm!(
 
 #[no_mangle]
 unsafe extern "C" fn aurora_entry(_argc: i64, _argv: *const *const u8) -> i32 {
-    buf_init();
     crate::run(90.0);
     0
 }
@@ -191,9 +189,26 @@ pub fn sleep_ms(ms: u64) {
 
 // ── Terminal size ─────────────────────────────────────────────────────────────
 
-pub fn term_size() -> (usize, usize) {
-    let mut ws = Winsize { row: 0, col: 0, _xp: 0, _yp: 0 };
+pub fn term_winsize() -> TermWinsize {
+    let mut ws = Winsize {
+        row: 0,
+        col: 0,
+        xpixel: 0,
+        ypixel: 0,
+    };
     unsafe { sys3(16 /* SYS_ioctl */, 1, 0x5413 /* TIOCGWINSZ */, &mut ws as *mut _ as i64); }
+    TermWinsize {
+        row: ws.row,
+        col: ws.col,
+        xpixel: ws.xpixel,
+        ypixel: ws.ypixel,
+    }
+}
+
+/// Character-grid size `(cols, max_content_rows)`, used by the block-cell renderer in `aurora8k`.
+#[allow(dead_code)]
+pub fn term_size() -> (usize, usize) {
+    let ws = term_winsize();
     let c = if ws.col > 20 { ws.col as usize } else { 100 };
     let r = if ws.row > 10 { ws.row as usize } else { 36 };
     (c, r.saturating_sub(2))
@@ -201,35 +216,38 @@ pub fn term_size() -> (usize, usize) {
 
 // ── Frame buffer ──────────────────────────────────────────────────────────────
 
-static mut BUF_PTR: *mut u8 = core::ptr::null_mut();
+// Static BSS buffer for ANSI output — zero cost in the ELF file (NOBITS).
+// 2 MiB is ample for the largest ANSI/sixel frame aurora8k can produce.
+static mut BUF: [u8; 1 << 21] = [0u8; 1 << 21];
 
-fn buf_init() {
-    // MAP_ANONYMOUS|MAP_PRIVATE = 0x22, PROT_READ|PROT_WRITE = 3, SYS_mmap = 9
-    let p = unsafe { sys6(9, 0, 1 << 20, 3, 0x22, -1, 0) };
-    unsafe { BUF_PTR = p as *mut u8; }
-}
-
-/// Allocate a private anonymous memory region of `size` bytes.
-/// Returns the mapped address.  Caller must not exceed `size` bytes.
+/// Write `len` bytes from `ptr` to stdout (fd 1).
 #[allow(dead_code)]
-pub unsafe fn alloc_anon(size: usize) -> *mut u8 {
-    sys6(9, 0, size as i64, 3, 0x22, -1, 0) as *mut u8
+pub unsafe fn write_raw(ptr: *const u8, len: usize) {
+    core::arch::asm!(
+        "syscall",
+        inlateout("rax") 1_i64 => _,
+        in("rdi") 1_i64,
+        in("rsi") ptr,
+        in("rdx") len,
+        lateout("rcx") _, lateout("r11") _,
+        options(nostack)
+    );
 }
 
-/// Write-only byte buffer backed by a mmap'd 1 MiB region.
+/// Write-only byte buffer backed by the static BSS region.
 pub struct Out(pub usize);
 
 impl Out {
     pub fn clear(&mut self) { self.0 = 0; }
 
     pub fn push(&mut self, b: u8) {
-        unsafe { BUF_PTR.add(self.0).write(b); }
+        unsafe { BUF.as_mut_ptr().add(self.0).write(b); }
         self.0 += 1;
     }
 
     pub fn push_str(&mut self, s: &str) {
         let bytes = s.as_bytes();
-        let dst = unsafe { BUF_PTR.add(self.0) };
+        let dst = unsafe { BUF.as_mut_ptr().add(self.0) };
         for (i, &b) in bytes.iter().enumerate() {
             unsafe { core::ptr::write_volatile(dst.add(i), b); }
         }
@@ -237,7 +255,7 @@ impl Out {
     }
 
     pub fn flush(&self) {
-        unsafe { sys3(1 /* SYS_write */, 1, BUF_PTR as i64, self.0 as i64); }
+        unsafe { sys3(1 /* SYS_write */, 1, BUF.as_ptr() as i64, self.0 as i64); }
     }
 }
 
