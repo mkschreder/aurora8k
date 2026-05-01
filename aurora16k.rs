@@ -359,7 +359,7 @@ fn map(p0:V,cx:&MapCtx)->Hit {
     // Columns at r=2.35 — skip when clearly out of range
     if rr > 1.8 && rr < 3.2 {
         let aa =rep(a,2.0*PI/8.0);
-        let q  =V::new(rr-2.35,p0.y,aa*rr);
+        let q  =V::new(rr-2.35,p0.y+0.15,aa*rr);  // +0.15: shaft bottom (half-h=1.1) reaches floor at y=-1.25
         let shaft=sd_cyl_y(q,0.07,1.1);
         let cap=fmn(sd_torus(q+V::new(0.0,-1.04,0.0),0.11,0.025),
                    sd_torus(q+V::new(0.0, 1.04,0.0),0.11,0.025));
@@ -687,7 +687,7 @@ fn shade(ro:V,rd:V,cx:&MapCtx)->V {
         glow=glow+V::new(0.06,0.09,0.20)*mist_vol;
 
         if h.d<0.0015*(1.0+depth*0.12) { mat=h.m; break; }
-        depth+=clamp(h.d,0.006,0.45);
+        depth+=clamp(h.d*0.80,0.006,0.35);  // 0.8× guard: map() is not a strict SDF (gem noise, smin)
         if depth>18.0||i==79 { return sky_col+glow*0.55; }
     }
 
@@ -736,7 +736,8 @@ fn shade(ro:V,rd:V,cx:&MapCtx)->V {
         col=col+base*dif+V::new(1.0,0.95,0.8)*spec*spec_scale*(0.55+0.45*dif);
     }
 
-    let fr=fmx(1.0+n.dot(rd),0.0); let fres=fr*fr*fr;
+    let fr=clamp(1.0+n.dot(rd),0.0,1.0);  // clamp: overshoot landing can give n·rd>0 → fres>1
+    let fres=fr*fr*fr;
     let ao_val=ao(p,n,mat,cx);
     col=col*ao_val+V::new(0.25,0.85,1.0)*fres;
 
@@ -851,15 +852,6 @@ fn push_u8(out:&mut Out,v:u8) {
     out.push(b'0'+v%10);
 }
 
-fn push_time(out:&mut Out,t:f32) {
-    let s=t as u32;
-    let d=(((t-s as f32)*10.0) as u32).min(9);
-    if s<10 { out.push_str("  "); } else if s<100 { out.push(b' '); }
-    push_u8(out,s as u8);
-    out.push(b'.'); out.push(b'0'+(d as u8));
-    out.push(b's');
-}
-
 fn render(w:usize,h:usize,cx:&MapCtx,out:&mut Out) {
     out.push_str("\x1b[H");
     let t=cx.t;
@@ -877,10 +869,8 @@ fn render(w:usize,h:usize,cx:&MapCtx,out:&mut Out) {
                 let rd=(f*1.35+r*px+u*py).norm();
                 let vign=1.0-0.38*fmn(px*px+py*py,1.0)
                             -0.12*fmx(fmx(px.abs(),py.abs())-0.75,0.0);
-                let grain_seed=(x as f32*1031.0+yy as f32*2999.0+t*7919.0).sin()*43758.5453;
-                let grain=0.03*((grain_seed-fast_floor(grain_seed))*2.0-1.0);
                 let raw=shade(ro,rd,cx)*vign;
-                rgb[sy]=tonemap(V::new(raw.x+grain,raw.y+grain,raw.z+grain*0.8),t);
+                rgb[sy]=tonemap(raw,t);
             }
             let (r1,g1,b1)=rgb[0]; let (r2,g2,b2)=rgb[1];
             out.push_str("\x1b[38;2;"); push_u8(out,r1); out.push(b';');
@@ -893,23 +883,6 @@ fn render(w:usize,h:usize,cx:&MapCtx,out:&mut Out) {
         }
         out.push_str("\x1b[0m\n");
     }
-
-    const TITLE: &[u8] = b" AURORA16K / CPU SDF RUST ";
-    let pct=fmn(t*(100.0/90.0), 100.0) as usize;
-    let barw=w.saturating_sub(TITLE.len()+14);
-    let fill=barw*pct/100;
-    let left=w.saturating_sub(TITLE.len())/2;
-    out.push_str("\x1b[0m");
-    for _ in 0..left { out.push(b' '); }
-    for &b in TITLE { out.push(b); }
-    out.push_str("  \x1b[38;2;80;200;255m");
-    for i in 0..barw {
-        if i<fill { out.push(0xe2); out.push(0x96); out.push(0xa0); }
-        else       { out.push(0xc2); out.push(0xb7); }
-    }
-    out.push_str("  \x1b[38;2;140;200;255m");
-    push_time(out,t);
-    out.push_str("\x1b[0m");
 }
 
 // ── Main loop ─────────────────────────────────────────────────────────────────
