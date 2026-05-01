@@ -91,7 +91,7 @@ vec2 forest_hit(vec3 p0) {
     float cell = 2.2, gx = floor(p0.x / cell), gz = floor(p0.z / cell);
     for (int di = -1; di <= 1; di++)
         for (int dj = -1; dj <= 1; dj++) {
-            float cx_ = (gx + float(di)) * cell, cz_ = (gz + float(dj)) * cell;
+            float cx_ = (gx + .5 + float(di)) * cell, cz_ = (gz + .5 + float(dj)) * cell;
             vec2 dd = vec2(p0.x - cx_, p0.z - cz_);
             if (dot(dd, dd) > 6.5)
                 continue;
@@ -110,7 +110,7 @@ vec2 forest_hit(vec3 p0) {
             vec3 tp = p0 - vec3(tx, by_, tz);
             if (length(tp.xz) > tree_r + .6)
                 continue;
-            if (tp.y < -.8 || tp.y > tree_ht + .4)
+            if (tp.y < -1.05 || tp.y > tree_ht + .4)
                 continue;
             // Trunk extends below by_ to reach the actual terrain regardless of
             // the terrain_h approximation used for by_.
@@ -124,7 +124,7 @@ vec2 forest_hit(vec3 p0) {
                     break;
                 float sw = wind * fy * .25;
                 vec3 fq = tp - vec3(sw, fy, sw * .5);
-                h = hitp(h, length(vec3(fq.x, fq.y * .8, fq.z)) - fr, 7.);
+                h = hitp(h, length(vec3(fq.x, fq.y * 1.55, fq.z)) - fr, 7.);
             }
         }
     return h;
@@ -168,7 +168,7 @@ vec2 map_(vec3 p0, Ctx cx) {
                                                 sd_torus(q + vec3(0, 1.04, 0), .11, .025))),
                  3.);
     }
-    if (rr < 4.) {
+    if (rr < 2.5) {
         vec3 gv = vec3(rep(p0.x + .3 * cx.floor_s, .75), p0.y + 1.215, rep(p0.z, .75));
         h = hitp(h, min(sd_box(gv, vec3(.20, .018, .018)), sd_box(gv, vec3(.018, .018, .20))), 5.);
     }
@@ -345,25 +345,27 @@ vec3 sky_(vec3 rd) {
                                           .022 * sin(ang * 9. + T * .04) + .012 * sin(ang * 23.) +
                                           .006 * sin(ang * 51. + T * .10);
     float mtn = smoothstep(ridge + .018, ridge - .010, rd.y);
-    c = c * (1. - mtn * .87) + vec3(.010, .018, .038) * mtn;
+    c = c * (1. - mtn) + vec3(.010, .018, .038) * mtn;
+    float sky = 1. - mtn;
     c += vec3(.25, .30, .55) * smoothstep(.15, -.05, rd.y) *
-         pow(clamp(dot(rd, normalize(vec3(md.x, 0, md.z))), 0., 1.), 2.) * .18;
+         pow(clamp(dot(rd, normalize(vec3(md.x, 0, md.z))), 0., 1.), 2.) * .18 * sky;
     float ch = smoothstep(.08, .26, rd.y) * (1. - smoothstep(.28, .52, rd.y));
     c += vec3(.07, .09, .16) *
          pow((.5 + .5 * sin(ang * 7. + T * .06)) * (.5 + .5 * sin(ang * 13. - rd.y * 9. + T * .04)),
              2.) *
-         ch;
+         ch * sky;
     float hm = smoothstep(.04, .42, rd.y) * (1. - smoothstep(.48, .88, rd.y));
-    c += vec3(.04, .65, .38) * (.5 + .5 * sin(ang * 3.2 + T * .17)) * hm *
-             pow(.5 + .5 * sin(ang * 17. + rd.y * 23. + T * 1.20), 2.) * .28 +
-         vec3(.55, .08, .92) * (.5 + .5 * sin(ang * 5.1 + T * .24 + 2.)) * hm *
-             pow(.5 + .5 * sin(ang * 13. + rd.y * 15. + T * .90), 2.) * .22 +
-         vec3(.08, .40, .85) * (.5 + .5 * sin(ang * 7.3 + T * .11 + 4.5)) * hm *
-             pow(.5 + .5 * sin(ang * 23. + rd.y * 31. + T * 1.55), 2.) * .7 * .18 +
-         vec3(.80, .30, .60) * (.5 + .5 * sin(ang * 11. + T * .31 + 1.2)) * hm *
-             pow(.5 + .5 * sin(ang * 29. + rd.y * 37. + T * 2.1), 2.) * .6 * .15;
+    c += (vec3(.04, .65, .38) * (.5 + .5 * sin(ang * 3.2 + T * .17)) *
+              pow(.5 + .5 * sin(ang * 17. + rd.y * 23. + T * 1.20), 2.) * .28 +
+          vec3(.55, .08, .92) * (.5 + .5 * sin(ang * 5.1 + T * .24 + 2.)) *
+              pow(.5 + .5 * sin(ang * 13. + rd.y * 15. + T * .90), 2.) * .22 +
+          vec3(.08, .40, .85) * (.5 + .5 * sin(ang * 7.3 + T * .11 + 4.5)) *
+              pow(.5 + .5 * sin(ang * 23. + rd.y * 31. + T * 1.55), 2.) * .7 * .18 +
+          vec3(.80, .30, .60) * (.5 + .5 * sin(ang * 11. + T * .31 + 1.2)) *
+              pow(.5 + .5 * sin(ang * 29. + rd.y * 37. + T * 2.1), 2.) * .6 * .15) *
+         hm * sky;
     c += vec3(.12, .08, .30) * pow(clamp(dot(rd, normalize(vec3(-.4, .55, .72))), 0., 1.), 3.) *
-         smoothstep(.12, .40, rd.y) * .25;
+         smoothstep(.12, .40, rd.y) * .25 * sky;
     return c;
 }
 vec3 shade_(vec3 ro, vec3 rd, Ctx cx) {
@@ -498,7 +500,8 @@ void cam_(out vec3 ro, out vec3 f, out vec3 r, out vec3 u) {
         ht = 3. + k * 1.8;
         spd = .06;
     }
-    float tt = T * spd;
+    float base_tt = (act == 1) ? 1.26 : (act == 2) ? 3.78 : (act == 3) ? 10.98 : (act == 4) ? 12.60 : 0.;
+    float tt = base_tt + loc * spd;
     ro = vec3(dist * cos(tt), ht, dist * sin(tt));
     float ly = (act == 4) ? -.28 + .12 * sin(T * .25) : -.08 + .18 * sin(T * .28);
     f = normalize(vec3(0, ly, 0) - ro);
