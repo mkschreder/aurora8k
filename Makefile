@@ -40,13 +40,13 @@ RUSTFLAGS_PROF = \
 	-C link-arg=-Wl,--no-eh-frame-hdr
 
 SRCS8  = aurora8k.rs sys.rs
-SRCS16 = aurora16k.rs sys.rs
+SRCS16 = aurora16k.rs sys.rs aurora16k.vert aurora16k.frag
 
 # Must match W, PH in aurora16k.rs.
 AURORA16_W := 640
 AURORA16_H := 360
 
-.PHONY: all clean pack run run16 record16 profile8 profile16
+.PHONY: all clean pack run run16 record16 profile8 profile16 fmt-glsl
 
 # ── Default: aurora8k (8 KB uncompressed) + aurora16k GL (GPU-accelerated) ───
 all: aurora8k aurora8k_packed aurora16k
@@ -131,3 +131,8 @@ clean:
 	      flamegraph8k.svg flamegraph16k.svg perf.data \
 	      aurora16k.mp4 \
 	      librust_out.rmeta *.rcgu.o
+
+# Re-format GLSL shader files in place (requires clang-format).
+fmt-glsl:
+	clang-format --style=file:.clang-format-glsl --assume-filename=x.glsl \
+	  -i aurora16k.vert aurora16k.frag
