@@ -1,32 +1,18 @@
-// aurora16k.rs — GL-accelerated no_std SDF intro.
-// Raymarcher runs entirely in a GLSL fragment shader on the GPU.
-// Raw RGB24 frames written to stdout for piping to ffplay / ffmpeg.
-//
-// Build: make aurora16k_standard
-// Run:   make run16      (pipes to ffplay for live preview)
-//        make record16   (records full 90 s animation to aurora16k.mp4)
-//
-// Linux x86-64. Requires libEGL and libGL (Mesa or proprietary).
-// Context: EGL 1.5 pbuffer + OpenGL 3.3 Core.  No libc in Rust code.
 #![no_std]
 #![no_main]
 
 mod sys;
 use sys::{clock_monotonic, elapsed, write_raw, write_stderr};
 
-// ── Resolution ───────────────────────────────────────────────────────────────
 const W:  usize = 640;
 const PH: usize = 360;
 
-// glReadPixels writes into this BSS buffer (bottom-to-top row order from GL).
 static mut FRAMEBUF: [u8; W * PH * 3] = [0u8; W * PH * 3];
-// Flip buffer: rows copied top-to-bottom for stdout (zero ELF cost, BSS).
 static mut FLIPBUF:  [u8; W * PH * 3] = [0u8; W * PH * 3];
 
 // ── EGL ───────────────────────────────────────────────────────────────────────
-type P = *mut ();  // generic opaque handle for EGL / GL objects
+type P = *mut ();
 
-const EGL_NONE:                        i32 = 0x3038;
 const EGL_PBUFFER_BIT:                 i32 = 0x0001;
 const EGL_SURFACE_TYPE:                i32 = 0x3033;
 const EGL_RENDERABLE_TYPE:             i32 = 0x3040;
@@ -34,6 +20,7 @@ const EGL_OPENGL_BIT:                  i32 = 0x0008;
 const EGL_DEPTH_SIZE:                  i32 = 0x3025;
 const EGL_WIDTH:                       i32 = 0x3057;
 const EGL_HEIGHT:                      i32 = 0x3056;
+const EGL_NONE:                        i32 = 0x3038;
 const EGL_OPENGL_API:                  u32 = 0x30A2;
 const EGL_CONTEXT_MAJOR_VERSION:       i32 = 0x3098;
 const EGL_CONTEXT_MINOR_VERSION:       i32 = 0x30FB;
@@ -65,8 +52,6 @@ extern "C" {
     fn glCreateShader(kind: u32) -> u32;
     fn glShaderSource(sh: u32, n: i32, src: *const *const u8, len: *const i32);
     fn glCompileShader(sh: u32);
-    fn glGetShaderiv(sh: u32, pname: u32, params: *mut i32);
-    fn glGetShaderInfoLog(sh: u32, max: i32, length: *mut i32, log: *mut u8);
     fn glCreateProgram() -> u32;
     fn glAttachShader(prog: u32, sh: u32);
     fn glLinkProgram(prog: u32);
@@ -80,19 +65,8 @@ extern "C" {
     fn glReadPixels(x: i32, y: i32, w: i32, h: i32, fmt: u32, typ: u32, data: *mut u8);
 }
 
-// ── Shaders — embedded from separate files at compile time ─────────────────────
-//
-// aurora16k.vert — fullscreen triangle from gl_VertexID (no VBO needed)
-// aurora16k.frag — full SDF raymarcher (uniforms: T=time, R=resolution)
-//
-// Both files are formatted with clang-format and can be edited independently.
-// Precompiled SPIR-V (glslangValidator) is possible but requires GL 4.6 /
-// GL_ARB_gl_spirv; our GL 3.3 Core context compiles them at context init time.
 const VERT: &[u8] = include_bytes!("aurora16k.vert");
 const FRAG: &[u8] = include_bytes!("aurora16k.frag");
-
-
-// ── EGL + GL setup ─────────────────────────────────────────────────────────────
 
 unsafe fn compile(src: &[u8], kind: u32) -> u32 {
     let sh = glCreateShader(kind);
@@ -100,44 +74,26 @@ unsafe fn compile(src: &[u8], kind: u32) -> u32 {
     let len = src.len() as i32;
     glShaderSource(sh, 1, &ptr, &len);
     glCompileShader(sh);
-
-    // Surface compile errors to stderr so failures are visible
-    let mut ok: i32 = 0;
-    glGetShaderiv(sh, 0x8B81 /*GL_COMPILE_STATUS*/, &mut ok);
-    if ok == 0 {
-        let mut log = [0u8; 1024];
-        let mut n: i32 = 0;
-        glGetShaderInfoLog(sh, 1024, &mut n, log.as_mut_ptr());
-        write_stderr(log.as_ptr(), n as usize);
-        write_stderr(b"\n".as_ptr(), 1);
-    }
     sh
 }
 
-// ── Main render loop ───────────────────────────────────────────────────────────
-
 pub(crate) fn run(seconds: f32, record: bool) {
     unsafe {
-        // ── EGL: pbuffer context, no window needed ─────────────────────────────
-        let dpy = eglGetDisplay(core::ptr::null_mut());   // EGL_DEFAULT_DISPLAY
+        let dpy = eglGetDisplay(core::ptr::null_mut());
         eglInitialize(dpy, core::ptr::null_mut(), core::ptr::null_mut());
         eglBindAPI(EGL_OPENGL_API);
 
-        let cfg_attrs: [i32; 9] = [
+        let cfg_attrs: [i32; 7] = [
             EGL_SURFACE_TYPE,    EGL_PBUFFER_BIT,
             EGL_RENDERABLE_TYPE, EGL_OPENGL_BIT,
             EGL_DEPTH_SIZE,      0,
-            EGL_NONE, 0, 0,
+            EGL_NONE,
         ];
         let mut cfg: P = core::ptr::null_mut();
         let mut ncfg: i32 = 0;
         eglChooseConfig(dpy, cfg_attrs.as_ptr(), &mut cfg, 1, &mut ncfg);
 
-        let pb_attrs: [i32; 5] = [
-            EGL_WIDTH,  W  as i32,
-            EGL_HEIGHT, PH as i32,
-            EGL_NONE,
-        ];
+        let pb_attrs: [i32; 5] = [EGL_WIDTH, W as i32, EGL_HEIGHT, PH as i32, EGL_NONE];
         let surface = eglCreatePbufferSurface(dpy, cfg, pb_attrs.as_ptr());
 
         let ctx_attrs: [i32; 7] = [
@@ -149,7 +105,6 @@ pub(crate) fn run(seconds: f32, record: bool) {
         let ctx = eglCreateContext(dpy, cfg, core::ptr::null_mut(), ctx_attrs.as_ptr());
         eglMakeCurrent(dpy, surface, surface, ctx);
 
-        // ── Shader program ─────────────────────────────────────────────────────
         let vert = compile(VERT, GL_VERTEX_SHADER);
         let frag = compile(FRAG, GL_FRAGMENT_SHADER);
         let prog = glCreateProgram();
@@ -158,18 +113,15 @@ pub(crate) fn run(seconds: f32, record: bool) {
         glLinkProgram(prog);
         glUseProgram(prog);
 
-        // VAO required by OpenGL 3.3 Core even without vertex data
         let mut vao: u32 = 0;
         glGenVertexArrays(1, &mut vao);
         glBindVertexArray(vao);
-
         glViewport(0, 0, W as i32, PH as i32);
 
         let t_loc = glGetUniformLocation(prog, b"T\0".as_ptr());
         let r_loc = glGetUniformLocation(prog, b"R\0".as_ptr());
         glUniform2f(r_loc, W as f32, PH as f32);
 
-        // ── Render loop ────────────────────────────────────────────────────────
         let start = clock_monotonic();
         let mut frame_t = 0.0_f32;
 
@@ -180,12 +132,10 @@ pub(crate) fn run(seconds: f32, record: bool) {
             glUniform1f(t_loc, t);
             glDrawArrays(GL_TRIANGLES, 0, 3);
 
-            // GL row order is bottom-to-top; read into FRAMEBUF
             glReadPixels(0, 0, W as i32, PH as i32,
                          GL_RGB, GL_UNSIGNED_BYTE, FRAMEBUF.as_mut_ptr());
 
-            // Flip rows into FLIPBUF (1 memcpy per row) then write once —
-            // reduces 180 write syscalls/frame to a single 172,800-byte write.
+            // glReadPixels is bottom-to-top; flip rows before writing to stdout.
             let row = W * 3;
             for y in 0..PH {
                 core::ptr::copy_nonoverlapping(

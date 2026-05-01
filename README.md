@@ -1,4 +1,4 @@
-# Aurora16k: A Developer-Oriented Deep Dive
+# Aurora16k: A 16k SDF Demo In GLSL + Rust
 
 This is a 16k demo using GLSL and rust.
 
