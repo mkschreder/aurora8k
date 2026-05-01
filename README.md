@@ -1,15 +1,10 @@
-# aurora16k — GLSL Raymarcher: Complete System Walkthrough
+# Aurora16k: A 16k SDF Demo In GLSL + Rust
 
-A sizecoded demoscene intro: a procedural fantasy scene rendered entirely
-inside a GLSL fragment shader, streamed as raw RGB frames to stdout.
+This is a 16k demo using GLSL and rust.
 
-No meshes. No textures. No model files. No audio. No CPU-side scene graph.
-The fragment shader **is** the scene — geometry, animation, lighting, sky,
-camera, and post-processing all computed on demand for every pixel.
+There are no meshes, no textures, no model files, no image assets, no audio in this snippet, and no CPU-side scene graph.
 
-This document walks through every subsystem: the minimal Rust host that
-sets up EGL and OpenGL, the GLSL raymarcher, the SDF scene construction,
-the lighting model, and the camera choreography.
+The GPU fragment shader is the scene.
 
 ![Scene Screenshot](images/screenshot.png)
 
@@ -1154,6 +1149,8 @@ The X repetition drifts slightly with time:
 p0.x + .3 * cx.floor_s
 ```
 
+The entire grid block is guarded by `if (rr < 2.5)` so it only appears inside the temple clearing and does not produce floating cyan crosses in the forest terrain valleys.
+
 Material `5`.
 
 This reads as glowing cyan runic floor inlay.
@@ -1260,16 +1257,16 @@ if (rr > 3.5 && rr < 5.8) {
     float s7 = 2. * PI / 7.;
     float sid7 = floor(a / s7 + .5);
     float a7 = a - sid7 * s7;
-    float ss = sid7 * 9.3;
+    float ss = mod(sid7, 7.) * 9.3;
 
     h = hitp(
         h,
         sd_box(
             rot_z(
-                vec3(rr - 4.75, p0.y + 1.25, a7 * rr * 2.),
+                vec3(rr - 4.75, p0.y + 1.25, a7 * rr),
                 .08 * sin(ss)
             ),
-            vec3(.10, .70 + hash(ss) * .30, .08)
+            vec3(.10, .70 + hash(ss) * .30, .04)
         ),
         3.
     );
@@ -1376,16 +1373,16 @@ if (rr > .8 && rr < 1.9) {
     float s5 = 2. * PI / 5.;
     float sid5 = floor(a / s5 + .5);
     float a5 = a - sid5 * s5;
-    float m5s = sid5 * 11.7;
+    float m5s = mod(sid5, 5.) * 11.7;
 
     h = hitp(
         h,
         sd_box(
             rot_z(
-                vec3(rr - 1.25, p0.y + 1.25, a5 * rr * 2.5),
+                vec3(rr - 1.25, p0.y + 1.25, a5 * rr),
                 .05 * sin(m5s)
             ),
-            vec3(.06, .35 + hash(m5s) * .20, .05)
+            vec3(.06, .35 + hash(m5s) * .20, .02)
         ),
         9.
     );
@@ -1604,11 +1601,11 @@ Now `tp` is the sample point relative to the tree base.
 if (length(tp.xz) > tree_r + .6)
     continue;
 
-if (tp.y < -.3 || tp.y > tree_ht + .4)
+if (tp.y < -1.05 || tp.y > tree_ht + .4)
     continue;
 ```
 
-These skip points outside the plausible tree volume.
+These skip points outside the plausible tree volume. The lower bound `-1.05` matches the trunk cylinder's lowest extent, so the trunk can penetrate the terrain surface to hide the height approximation seam.
 
 This is important because `forest_hit()` is called inside `map_()`, which is called many times per ray.
 
@@ -1670,7 +1667,7 @@ for (int i = 0; i < 5; i++) {
 
     h = hitp(
         h,
-        length(vec3(fq.x, fq.y * .8, fq.z)) - fr,
+        length(vec3(fq.x, fq.y * 1.55, fq.z)) - fr,
         7.
     );
 }
@@ -1681,10 +1678,10 @@ The foliage is a stack of five vertically arranged ellipsoid-like blobs.
 The distance expression:
 
 ```glsl
-length(vec3(fq.x, fq.y * .8, fq.z)) - fr
+length(vec3(fq.x, fq.y * 1.55, fq.z)) - fr
 ```
 
-scales Y before measuring length. Because `fq.y` is multiplied by `0.8` (< 1), the blob is slightly taller than wide — a compact prolate shape that suits conifers. Crucially, a scale factor less than 1 keeps the SDF gradient magnitude below 1 in the y-direction, preserving the conservative distance bound required for correct sphere tracing.
+scales Y before measuring length. Because `fq.y` is multiplied by `1.55` (> 1), the ellipsoid is *flattened* vertically — a disc-like shape. Stacking five flattened discs whose radii decrease upward produces the tapered conifer silhouette. Note that a scale factor greater than 1 means the gradient magnitude can exceed 1 in the y-direction; the sphere tracer uses an 80% safety step factor to compensate.
 
 The radius `fr` decreases for higher layers:
 
@@ -2876,6 +2873,14 @@ This creates:
 
 The executable stores one formula, not many objects.
 
+When `floor(a / s + .5)` is used as a sector index for `hash()` input, the negative-X axis produces different raw index values on either side of the wrap-around (`atan` discontinuity at ±π). To ensure all N sectors always get the same hash regardless of which side the angle falls on, the index is folded with `mod(sid, N)` before being passed to `hash()`:
+
+```glsl
+float ss = mod(sid7, 7.) * 9.3;
+```
+
+This eliminates the visible "split" in one stone/post/shard per repeated ring at the −X azimuth.
+
 ---
 
 ## 3. Hash-Based Variation
@@ -3058,3 +3063,6 @@ The geometry is not loaded.
 The geometry is not stored.
 
 The geometry is computed on demand, for every pixel, every frame.
+
+```
+```
