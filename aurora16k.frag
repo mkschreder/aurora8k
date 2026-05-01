@@ -115,16 +115,14 @@ vec2 forest_hit(vec3 p0) {
             // Trunk extends below by_ to reach the actual terrain regardless of
             // the terrain_h approximation used for by_.
             h = hitp(h, sd_cyl_y(tp - vec3(0, tree_ht * .3 - .25, 0), .05, tree_ht * .3 + .75), 6.);
-            h = hitp(h, length(tp) - tree_r * .30, 6.);
             float wind = .055 * sin(T * 1.15 + tx * .7 + tz * .5);
-            for (int i = 0; i < 5; i++) {
-                float fi = float(i) * .20, fy = tree_ht * (.38 + fi),
-                      fr = tree_r * (1.05 - fi * 1.1);
-                if (fr <= 0.)
-                    break;
+            for (int i = 0; i < 4; i++) {
+                float fi = float(i) / 3.,
+                      fy = tree_ht * (.38 + fi * .55),
+                      fr = tree_r * (1.10 - fi * .75);
                 float sw = wind * fy * .25;
                 vec3 fq = tp - vec3(sw, fy, sw * .5);
-                h = hitp(h, length(vec3(fq.x, fq.y * 1.55, fq.z)) - fr, 7.);
+                h = hitp(h, length(fq) - fr, 7.);
             }
         }
     return h;
