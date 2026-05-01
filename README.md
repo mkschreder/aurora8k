@@ -1,10 +1,17 @@
-# Aurora16k: A 16k SDF Demo In GLSL + Rust
+# aurora16k — GLSL Raymarcher: Complete System Walkthrough
 
-This is a 16k demo using GLSL and rust.
+A sizecoded demoscene intro: a procedural fantasy scene rendered entirely
+inside a GLSL fragment shader, streamed as raw RGB frames to stdout.
 
-There are no meshes, no textures, no model files, no image assets, no audio in this snippet, and no CPU-side scene graph.
+No meshes. No textures. No model files. No audio. No CPU-side scene graph.
+The fragment shader **is** the scene — geometry, animation, lighting, sky,
+camera, and post-processing all computed on demand for every pixel.
 
-The GPU fragment shader is the scene.
+This document walks through every subsystem: the minimal Rust host that
+sets up EGL and OpenGL, the GLSL raymarcher, the SDF scene construction,
+the lighting model, and the camera choreography.
+
+![Scene Screenshot](images/screenshot.png)
 
 ---
 
@@ -59,66 +66,7 @@ The shader is responsible for:
 
 # Render Pipeline Diagram
 
-```svg
-<svg width="920" height="520" viewBox="0 0 920 520" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
-      <path d="M0,0 L0,6 L9,3 z" fill="#333"/>
-    </marker>
-    <style>
-      .box { fill:#f7f7fb; stroke:#222; stroke-width:1.5; rx:10; }
-      .gpu { fill:#eef8ff; stroke:#1b5d89; stroke-width:1.5; rx:10; }
-      .cpu { fill:#fff7e8; stroke:#9b6b16; stroke-width:1.5; rx:10; }
-      .out { fill:#eef9ee; stroke:#2d7d35; stroke-width:1.5; rx:10; }
-      .txt { font-family:monospace; font-size:14px; fill:#111; }
-      .small { font-family:monospace; font-size:12px; fill:#333; }
-      .arrow { stroke:#333; stroke-width:1.5; marker-end:url(#arrow); fill:none; }
-    </style>
-  </defs>
-
-  <rect x="30" y="40" width="220" height="100" class="cpu"/>
-  <text x="50" y="70" class="txt">Rust no_std host</text>
-  <text x="50" y="95" class="small">EGL pbuffer</text>
-  <text x="50" y="115" class="small">OpenGL 3.3 Core</text>
-
-  <rect x="350" y="40" width="230" height="100" class="gpu"/>
-  <text x="370" y="70" class="txt">Shader program</text>
-  <text x="370" y="95" class="small">fullscreen triangle</text>
-  <text x="370" y="115" class="small">fragment shader per pixel</text>
-
-  <rect x="670" y="40" width="210" height="100" class="gpu"/>
-  <text x="690" y="70" class="txt">Framebuffer</text>
-  <text x="690" y="95" class="small">640 x 360</text>
-  <text x="690" y="115" class="small">RGB pixels</text>
-
-  <rect x="350" y="220" width="230" height="120" class="gpu"/>
-  <text x="370" y="250" class="txt">Fragment shader</text>
-  <text x="370" y="275" class="small">camera ray</text>
-  <text x="370" y="295" class="small">raymarch map_()</text>
-  <text x="370" y="315" class="small">shade_()</text>
-
-  <rect x="670" y="220" width="210" height="120" class="cpu"/>
-  <text x="690" y="250" class="txt">glReadPixels</text>
-  <text x="690" y="275" class="small">bottom-to-top rows</text>
-  <text x="690" y="295" class="small">FRAMEBUF</text>
-  <text x="690" y="315" class="small">then row flip</text>
-
-  <rect x="350" y="400" width="230" height="80" class="cpu"/>
-  <text x="370" y="430" class="txt">stdout raw RGB24</text>
-  <text x="370" y="455" class="small">write_raw(FLIPBUF)</text>
-
-  <rect x="670" y="400" width="210" height="80" class="out"/>
-  <text x="690" y="430" class="txt">ffplay / ffmpeg</text>
-  <text x="690" y="455" class="small">preview or encode</text>
-
-  <path d="M250,90 L350,90" class="arrow"/>
-  <path d="M580,90 L670,90" class="arrow"/>
-  <path d="M465,140 L465,220" class="arrow"/>
-  <path d="M580,280 L670,280" class="arrow"/>
-  <path d="M775,340 L775,380 L580,440" class="arrow"/>
-  <path d="M580,440 L670,440" class="arrow"/>
-</svg>
-```
+![Render Pipeline](images/render-pipeline.svg)
 
 ---
 
@@ -464,73 +412,7 @@ Every pixel constructs a ray from the animated camera and calls `shade_()`.
 
 # Main Shader Flow Diagram
 
-```svg
-<svg width="900" height="760" viewBox="0 0 900 760" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <marker id="arr2" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
-      <path d="M0,0 L0,6 L9,3 z" fill="#222"/>
-    </marker>
-    <style>
-      .box { fill:#f8f8ff; stroke:#222; stroke-width:1.5; rx:10; }
-      .math { fill:#eef8ff; stroke:#1c638a; stroke-width:1.5; rx:10; }
-      .scene { fill:#fff4e8; stroke:#9a6515; stroke-width:1.5; rx:10; }
-      .light { fill:#f2fff0; stroke:#33813a; stroke-width:1.5; rx:10; }
-      .txt { font-family:monospace; font-size:14px; fill:#111; }
-      .small { font-family:monospace; font-size:12px; fill:#333; }
-      .arrow { stroke:#222; stroke-width:1.5; marker-end:url(#arr2); fill:none; }
-    </style>
-  </defs>
-
-  <rect x="330" y="20" width="240" height="70" class="box"/>
-  <text x="355" y="50" class="txt">main()</text>
-  <text x="355" y="72" class="small">per fragment / per pixel</text>
-
-  <rect x="80" y="140" width="220" height="80" class="math"/>
-  <text x="105" y="170" class="txt">makeCtx()</text>
-  <text x="105" y="195" class="small">precompute sin/cos</text>
-
-  <rect x="340" y="140" width="220" height="80" class="math"/>
-  <text x="365" y="170" class="txt">cam_()</text>
-  <text x="365" y="195" class="small">camera basis</text>
-
-  <rect x="600" y="140" width="220" height="80" class="math"/>
-  <text x="625" y="170" class="txt">screen ray</text>
-  <text x="625" y="195" class="small">rd = f*1.35+r*px+u*py</text>
-
-  <rect x="340" y="280" width="220" height="80" class="scene"/>
-  <text x="365" y="310" class="txt">shade_(ro, rd)</text>
-  <text x="365" y="335" class="small">raymarch and shade</text>
-
-  <rect x="80" y="420" width="220" height="90" class="scene"/>
-  <text x="105" y="450" class="txt">map_(p)</text>
-  <text x="105" y="475" class="small">distance + material</text>
-  <text x="105" y="495" class="small">terrain, temple, forest</text>
-
-  <rect x="340" y="420" width="220" height="90" class="light"/>
-  <text x="365" y="450" class="txt">norm_, shad_, ao_</text>
-  <text x="365" y="475" class="small">normals, shadows</text>
-  <text x="365" y="495" class="small">ambient occlusion</text>
-
-  <rect x="600" y="420" width="220" height="90" class="light"/>
-  <text x="625" y="450" class="txt">pal_, sky_</text>
-  <text x="625" y="475" class="small">materials, sky</text>
-  <text x="625" y="495" class="small">stars, moon, aurora</text>
-
-  <rect x="340" y="600" width="220" height="80" class="box"/>
-  <text x="365" y="630" class="txt">tone map</text>
-  <text x="365" y="655" class="small">vignette, contrast, gamma</text>
-
-  <path d="M450,90 L190,140" class="arrow"/>
-  <path d="M450,90 L450,140" class="arrow"/>
-  <path d="M450,90 L710,140" class="arrow"/>
-  <path d="M450,220 L450,280" class="arrow"/>
-  <path d="M710,220 L500,280" class="arrow"/>
-  <path d="M340,320 L300,440" class="arrow"/>
-  <path d="M450,360 L450,420" class="arrow"/>
-  <path d="M560,320 L650,420" class="arrow"/>
-  <path d="M450,510 L450,600" class="arrow"/>
-</svg>
-```
+![Main Shader Flow](images/shader-flow.svg)
 
 ---
 
@@ -844,42 +726,7 @@ This reduces aliasing and missed hits at far distances.
 
 # Raymarching Diagram
 
-```svg
-<svg width="900" height="380" viewBox="0 0 900 380" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <marker id="arr3" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
-      <path d="M0,0 L0,6 L9,3 z" fill="#333"/>
-    </marker>
-    <style>
-      .ray { stroke:#333; stroke-width:2; marker-end:url(#arr3); }
-      .step { stroke:#1f77b4; stroke-width:2; stroke-dasharray:4 3; }
-      .circle { fill:none; stroke:#1f77b4; stroke-width:1.5; opacity:.5; }
-      .surface { fill:#ddd; stroke:#111; stroke-width:2; }
-      .txt { font-family:monospace; font-size:13px; fill:#111; }
-    </style>
-  </defs>
-
-  <path class="surface" d="M650,80 C770,120 790,260 660,310 C570,350 475,300 500,200 C520,120 580,65 650,80z"/>
-  <line x1="80" y1="250" x2="810" y2="115" class="ray"/>
-
-  <circle cx="120" cy="243" r="100" class="circle"/>
-  <circle cx="315" cy="207" r="80" class="circle"/>
-  <circle cx="470" cy="178" r="48" class="circle"/>
-  <circle cx="565" cy="160" r="26" class="circle"/>
-  <circle cx="615" cy="151" r="11" class="circle"/>
-
-  <circle cx="120" cy="243" r="5" fill="#1f77b4"/>
-  <circle cx="315" cy="207" r="5" fill="#1f77b4"/>
-  <circle cx="470" cy="178" r="5" fill="#1f77b4"/>
-  <circle cx="565" cy="160" r="5" fill="#1f77b4"/>
-  <circle cx="615" cy="151" r="5" fill="#1f77b4"/>
-
-  <text x="65" y="280" class="txt">ro</text>
-  <text x="145" y="225" class="txt">step by SDF distance</text>
-  <text x="510" y="140" class="txt">steps shrink near surface</text>
-  <text x="640" y="150" class="txt">hit</text>
-</svg>
-```
+![Raymarching](images/raymarching.svg)
 
 ---
 
@@ -1117,28 +964,7 @@ This is fractal-ish sine terrain:
 
 # Terrain Diagram
 
-```svg
-<svg width="900" height="360" viewBox="0 0 900 360" xmlns="http://www.w3.org/2000/svg">
-  <style>
-    .ground { fill:none; stroke:#333; stroke-width:3; }
-    .flat { fill:#eaf7ff; opacity:.7; stroke:#247; stroke-width:1; }
-    .forest { fill:#eaffea; opacity:.7; stroke:#272; stroke-width:1; }
-    .txt { font-family:monospace; font-size:13px; fill:#111; }
-    .dash { stroke:#777; stroke-dasharray:5 4; }
-  </style>
-
-  <path class="ground" d="M40,230 C130,230 210,230 300,230 C350,220 390,210 440,225 C500,250 540,170 600,200 C670,240 720,150 860,185"/>
-  <rect x="210" y="80" width="270" height="190" class="flat"/>
-  <rect x="480" y="80" width="360" height="190" class="forest"/>
-  <line x1="300" y1="70" x2="300" y2="285" class="dash"/>
-  <line x1="480" y1="70" x2="480" y2="285" class="dash"/>
-
-  <text x="250" y="55" class="txt">flat temple clearing</text>
-  <text x="555" y="55" class="txt">rolling forest terrain</text>
-  <text x="300" y="305" class="txt">smoothstep transition</text>
-  <text x="40" y="255" class="txt">y = terrain_h(x,z)</text>
-</svg>
-```
+![Terrain](images/terrain.svg)
 
 ---
 
@@ -1625,49 +1451,7 @@ Material `3`.
 
 # Scene Layout Diagram
 
-```svg
-<svg width="900" height="760" viewBox="0 0 900 760" xmlns="http://www.w3.org/2000/svg">
-  <style>
-    .ring { fill:none; stroke:#333; stroke-width:1.5; }
-    .dash { fill:none; stroke:#777; stroke-width:1; stroke-dasharray:6 4; }
-    .crystal { fill:#d8b8ff; stroke:#6b2fb3; stroke-width:1.5; }
-    .water { fill:#aee9ff; stroke:#187ca0; stroke-width:1.5; opacity:.75; }
-    .forest { fill:#c9efc9; stroke:#267326; stroke-width:1.5; opacity:.55; }
-    .stone { fill:#e8d5a5; stroke:#8a6821; stroke-width:1.5; }
-    .txt { font-family:monospace; font-size:13px; fill:#111; }
-  </style>
-
-  <circle cx="450" cy="380" r="35" class="crystal"/>
-  <text x="405" y="385" class="txt">crystal</text>
-
-  <circle cx="450" cy="380" r="85" class="dash"/>
-  <text x="520" y="320" class="txt">inner runes</text>
-
-  <circle cx="450" cy="380" r="128" class="water"/>
-  <circle cx="450" cy="380" r="96" fill="white" opacity=".6"/>
-  <text x="545" y="390" class="txt">water ring</text>
-
-  <circle cx="450" cy="380" r="170" class="ring"/>
-  <text x="580" y="275" class="txt">8 columns</text>
-
-  <circle cx="450" cy="380" r="245" class="ring"/>
-  <text x="620" y="210" class="txt">4 gateways</text>
-
-  <circle cx="450" cy="380" r="315" class="ring"/>
-  <text x="645" y="145" class="txt">standing stones</text>
-
-  <circle cx="450" cy="380" r="365" class="forest"/>
-  <circle cx="450" cy="380" r="210" fill="white" opacity=".8"/>
-  <text x="185" y="110" class="txt">forest annulus</text>
-
-  <circle cx="450" cy="380" r="55" class="dash"/>
-  <circle cx="450" cy="380" r="115" class="dash"/>
-  <circle cx="450" cy="380" r="160" class="dash"/>
-  <circle cx="450" cy="380" r="250" class="dash"/>
-
-  <text x="390" y="720" class="txt">top-down conceptual layout</text>
-</svg>
-```
+![Scene Layout](images/scene-layout.svg)
 
 ---
 
@@ -1924,57 +1708,7 @@ Material `7`.
 
 # Forest Diagram
 
-```svg
-<svg width="900" height="520" viewBox="0 0 900 520" xmlns="http://www.w3.org/2000/svg">
-  <style>
-    .grid { stroke:#ccc; stroke-width:1; }
-    .cell { fill:#f8fff8; stroke:#aaa; stroke-width:1; }
-    .tree { fill:#4c9a4c; stroke:#174d17; stroke-width:1.2; }
-    .trunk { fill:#8a5a2b; stroke:#4a2b10; stroke-width:1; }
-    .skip { fill:#eee; stroke:#999; stroke-width:1; opacity:.5; }
-    .txt { font-family:monospace; font-size:13px; fill:#111; }
-    .small { font-family:monospace; font-size:11px; fill:#333; }
-  </style>
-
-  <text x="50" y="40" class="txt">forest_hit(): check only 3x3 neighboring cells</text>
-
-  <g transform="translate(60,80)">
-    <rect x="0" y="0" width="90" height="90" class="cell"/>
-    <rect x="90" y="0" width="90" height="90" class="cell"/>
-    <rect x="180" y="0" width="90" height="90" class="cell"/>
-    <rect x="0" y="90" width="90" height="90" class="cell"/>
-    <rect x="90" y="90" width="90" height="90" fill="#fff2cc" stroke="#aa8" stroke-width="2"/>
-    <rect x="180" y="90" width="90" height="90" class="cell"/>
-    <rect x="0" y="180" width="90" height="90" class="cell"/>
-    <rect x="90" y="180" width="90" height="90" class="cell"/>
-    <rect x="180" y="180" width="90" height="90" class="cell"/>
-
-    <circle cx="42" cy="55" r="12" class="tree"/>
-    <circle cx="150" cy="35" r="12" class="skip"/>
-    <circle cx="230" cy="72" r="12" class="tree"/>
-    <circle cx="61" cy="145" r="12" class="tree"/>
-    <circle cx="137" cy="132" r="5" fill="#d22"/>
-    <circle cx="216" cy="145" r="12" class="tree"/>
-    <circle cx="45" cy="220" r="12" class="skip"/>
-    <circle cx="120" cy="246" r="12" class="tree"/>
-    <circle cx="240" cy="225" r="12" class="tree"/>
-
-    <text x="105" y="124" class="small">sample p</text>
-    <text x="15" y="295" class="small">hash decides occupancy + jitter</text>
-  </g>
-
-  <g transform="translate(520,80)">
-    <rect x="100" y="260" width="18" height="90" class="trunk"/>
-    <ellipse cx="109" cy="250" rx="90" ry="34" class="tree"/>
-    <ellipse cx="109" cy="205" rx="75" ry="30" class="tree"/>
-    <ellipse cx="109" cy="165" rx="58" ry="26" class="tree"/>
-    <ellipse cx="109" cy="130" rx="40" ry="22" class="tree"/>
-    <ellipse cx="109" cy="100" rx="22" ry="18" class="tree"/>
-    <text x="0" y="380" class="txt">one tree = trunk + stacked foliage SDF blobs</text>
-    <text x="0" y="405" class="small">height, radius, sway, presence from hash(seed)</text>
-  </g>
-</svg>
-```
+![Forest](images/forest.svg)
 
 ---
 
@@ -2482,46 +2216,7 @@ This creates shimmering curtains without any textures.
 
 # Sky Composition Diagram
 
-```svg
-<svg width="900" height="520" viewBox="0 0 900 520" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <linearGradient id="skygrad" x1="0" x2="0" y1="1" y2="0">
-      <stop offset="0%" stop-color="#08051f"/>
-      <stop offset="55%" stop-color="#07184a"/>
-      <stop offset="100%" stop-color="#0b346a"/>
-    </linearGradient>
-  </defs>
-  <style>
-    .txt { font-family:monospace; font-size:13px; fill:#fff; }
-    .darktxt { font-family:monospace; font-size:13px; fill:#111; }
-    .mount { fill:#050914; }
-    .aurora1 { fill:none; stroke:#3cff9a; stroke-width:18; opacity:.45; }
-    .aurora2 { fill:none; stroke:#a64cff; stroke-width:12; opacity:.35; }
-    .cloud { fill:none; stroke:#aab3d8; stroke-width:16; opacity:.22; }
-    .moon { fill:#f2f5ff; stroke:#dfe7ff; stroke-width:8; }
-  </style>
-
-  <rect x="0" y="0" width="900" height="520" fill="url(#skygrad)"/>
-  <path class="aurora1" d="M80,190 C190,120 310,250 430,170 C540,100 650,220 820,130"/>
-  <path class="aurora2" d="M40,240 C180,170 310,270 460,210 C600,160 700,280 860,200"/>
-  <path class="cloud" d="M100,300 C230,270 310,330 440,295 C560,260 690,335 810,300"/>
-  <circle cx="680" cy="105" r="24" class="moon"/>
-
-  <circle cx="160" cy="95" r="2" fill="#fff"/>
-  <circle cx="220" cy="130" r="1.5" fill="#e8f2ff"/>
-  <circle cx="310" cy="70" r="2" fill="#fff"/>
-  <circle cx="510" cy="130" r="1.5" fill="#fff"/>
-  <circle cx="760" cy="180" r="2" fill="#dcecff"/>
-
-  <path class="mount" d="M0,390 L70,340 L130,370 L210,320 L300,380 L400,335 L500,365 L600,310 L700,370 L790,330 L900,380 L900,520 L0,520z"/>
-
-  <text x="45" y="45" class="txt">procedural stars</text>
-  <text x="475" y="100" class="txt">moon + halo</text>
-  <text x="120" y="175" class="txt">aurora sine bands</text>
-  <text x="110" y="305" class="txt">cloud band</text>
-  <text x="350" y="430" class="txt">mountain silhouette from angular ridge</text>
-</svg>
-```
+![Sky Composition](images/sky-composition.svg)
 
 ---
 
@@ -3091,67 +2786,7 @@ The final `sqrt()` approximates gamma correction.
 
 # Full Per-Pixel Diagram
 
-```svg
-<svg width="900" height="900" viewBox="0 0 900 900" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <marker id="arr4" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
-      <path d="M0,0 L0,6 L9,3 z" fill="#222"/>
-    </marker>
-    <style>
-      .box { fill:#f9f9ff; stroke:#222; stroke-width:1.4; rx:10; }
-      .scene { fill:#fff6e8; stroke:#916412; stroke-width:1.4; rx:10; }
-      .light { fill:#efffed; stroke:#227a2d; stroke-width:1.4; rx:10; }
-      .post { fill:#f0f6ff; stroke:#275c9a; stroke-width:1.4; rx:10; }
-      .txt { font-family:monospace; font-size:13px; fill:#111; }
-      .small { font-family:monospace; font-size:11px; fill:#333; }
-      .arrow { stroke:#222; stroke-width:1.4; marker-end:url(#arr4); fill:none; }
-    </style>
-  </defs>
-
-  <rect x="330" y="20" width="240" height="60" class="box"/>
-  <text x="355" y="55" class="txt">pixel gl_FragCoord</text>
-
-  <rect x="330" y="120" width="240" height="70" class="box"/>
-  <text x="355" y="150" class="txt">screen coords px, py</text>
-  <text x="355" y="170" class="small">aspect corrected</text>
-
-  <rect x="330" y="230" width="240" height="80" class="box"/>
-  <text x="355" y="260" class="txt">camera ray</text>
-  <text x="355" y="282" class="small">rd = normalize(f*1.35+r*px+u*py)</text>
-
-  <rect x="330" y="360" width="240" height="80" class="scene"/>
-  <text x="355" y="390" class="txt">raymarch shade_()</text>
-  <text x="355" y="412" class="small">loop up to 80 steps</text>
-
-  <rect x="60" y="500" width="220" height="80" class="scene"/>
-  <text x="85" y="530" class="txt">map_()</text>
-  <text x="85" y="552" class="small">nearest distance + material</text>
-
-  <rect x="340" y="500" width="220" height="80" class="light"/>
-  <text x="365" y="530" class="txt">surface shading</text>
-  <text x="365" y="552" class="small">normal, AO, shadow, lights</text>
-
-  <rect x="620" y="500" width="220" height="80" class="light"/>
-  <text x="645" y="530" class="txt">environment</text>
-  <text x="645" y="552" class="small">sky, fog, mist, glow</text>
-
-  <rect x="330" y="650" width="240" height="80" class="post"/>
-  <text x="355" y="680" class="txt">post color</text>
-  <text x="355" y="702" class="small">vignette, warm, contrast</text>
-
-  <rect x="330" y="780" width="240" height="60" class="post"/>
-  <text x="355" y="815" class="txt">O = vec4(color, 1)</text>
-
-  <path d="M450,80 L450,120" class="arrow"/>
-  <path d="M450,190 L450,230" class="arrow"/>
-  <path d="M450,310 L450,360" class="arrow"/>
-  <path d="M390,440 L190,500" class="arrow"/>
-  <path d="M450,440 L450,500" class="arrow"/>
-  <path d="M510,440 L730,500" class="arrow"/>
-  <path d="M450,580 L450,650" class="arrow"/>
-  <path d="M450,730 L450,780" class="arrow"/>
-</svg>
-```
+![Per-Pixel Flow](images/per-pixel-flow.svg)
 
 ---
 
