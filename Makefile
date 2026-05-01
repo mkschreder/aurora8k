@@ -13,36 +13,52 @@ RUSTFLAGS_COMMON = \
 	-C link-arg=-Wl,--build-id=none \
 	-C link-arg=-Wl,--no-eh-frame-hdr
 
-SRCS = aurora8k.rs sys.rs
+SRCS8  = aurora8k.rs sys.rs
+SRCS16 = aurora16k.rs sys.rs
 
-.PHONY: all clean pack run
+.PHONY: all clean pack run run16
 
-# ── Default: smallest uncompressed binary (~9.3 KB, custom minimal ELF) ───────
+# ── Default: smallest uncompressed binary (~8.1 KB, custom minimal ELF) ────────
 all: aurora8k
 
-aurora8k: $(SRCS) linker.ld
+aurora8k: $(SRCS8) linker.ld
 	$(RUSTC) aurora8k.rs --edition $(EDITION) $(RUSTFLAGS_COMMON) \
 		-C link-arg=-Wl,-T,linker.ld \
 		-o $@
 	strip --strip-section-headers $@
 
-# ── UPX-packed variant (~8.4 KB, self-extracting) ─────────────────────────────
+# ── aurora8k UPX-packed variant ──────────────────────────────────────────────
 pack: aurora8k_packed
 
 aurora8k_packed: aurora8k_standard
 	cp aurora8k_standard $@
 	$(UPX) --nrv2d -9 --force -q $@
 
-# Standard ELF layout required by UPX (INSERT discard script)
-aurora8k_standard: $(SRCS) linker-upx.ld
+aurora8k_standard: $(SRCS8) linker-upx.ld
 	$(RUSTC) aurora8k.rs --edition $(EDITION) $(RUSTFLAGS_COMMON) \
 		-C link-arg=-Wl,-T,linker-upx.ld \
 		-o $@
+
+# ── aurora16k: expanded 16 KB UPX-compressed variant ────────────────────────
+# Uncompressed standard ELF (measure with: wc -c aurora16k_standard)
+aurora16k_standard: $(SRCS16) linker-upx.ld
+	$(RUSTC) aurora16k.rs --edition $(EDITION) $(RUSTFLAGS_COMMON) \
+		-C link-arg=-Wl,-T,linker-upx.ld \
+		-o $@
+
+# UPX-packed target (goal: ≤16 384 bytes)
+aurora16k: aurora16k_standard
+	cp aurora16k_standard $@
+	$(UPX) --nrv2d -9 --force -q $@
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 run: aurora8k
 	./aurora8k
 
+run16: aurora16k_standard
+	./aurora16k_standard
+
 clean:
 	rm -f aurora8k aurora8k_standard aurora8k_packed \
+	      aurora16k aurora16k_standard \
 	      librust_out.rmeta *.rcgu.o
