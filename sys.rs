@@ -221,27 +221,26 @@ pub fn term_size() -> (usize, usize) {
 // 2 MiB is ample for the largest ANSI/sixel frame aurora8k can produce.
 static mut BUF: [u8; 1 << 21] = [0u8; 1 << 21];
 
-/// Write all `len` bytes from `ptr` to stdout (fd 1), retrying short writes.
+/// Write all `len` bytes from `ptr` to stdout (fd 1).
+/// Single SYS_write — for blocking pipes the kernel writes all bytes or blocks
+/// until the reader drains enough. Retry is not needed for our use case.
 #[allow(dead_code)]
-pub unsafe fn write_raw(mut ptr: *const u8, mut len: usize) {
-    while len > 0 {
-        let n: i64;
-        core::arch::asm!(
-            "syscall",
-            inlateout("rax") 1_i64 => n,
-            in("rdi") 1_i64,
-            in("rsi") ptr,
-            in("rdx") len,
-            lateout("rcx") _, lateout("r11") _,
-            options(nostack)
-        );
-        if n <= 0 {
-            return;
-        }
-        let u = n as usize;
-        ptr = ptr.add(u);
-        len -= u;
-    }
+pub unsafe fn write_raw(ptr: *const u8, len: usize) {
+    core::arch::asm!(
+        "syscall",
+        inlateout("rax") 1_i64 => _,
+        in("rdi") 1_i64,
+        in("rsi") ptr,
+        in("rdx") len,
+        lateout("rcx") _, lateout("r11") _,
+        options(nostack)
+    );
+}
+
+/// Write `len` bytes from `ptr` to stderr (fd 2).
+#[allow(dead_code)]
+pub unsafe fn write_stderr(ptr: *const u8, len: usize) {
+    sys3(1 /* SYS_write */, 2, ptr as i64, len as i64);
 }
 
 /// Write-only byte buffer backed by the static BSS region.

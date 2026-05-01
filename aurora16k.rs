@@ -23,7 +23,7 @@ mod sys;
 
 use core::f32::consts::PI;
 use core::ops::{Add, Div, Mul, Neg, Sub};
-use sys::{F32Ext, clock_monotonic, elapsed, fast_floor, write_raw};
+use sys::{F32Ext, clock_monotonic, elapsed, fast_floor, write_raw, write_stderr};
 
 // Render resolution — change here and update the GStreamer pipeline string below.
 const W:  usize = 320;
@@ -696,19 +696,6 @@ fn shade(ro:V,rd:V,cx:&MapCtx)->V {
         let ff_mask=smoothstep(9.0,2.5,(p.x*p.x+p.z*p.z).sqrt());
         glow=glow+V::new(0.40,0.95,0.55)*(0.0008/(0.018+fd*fd))*ff_mask;
 
-        let drift2=V::new(0.3*(t*0.23).cos(), t*0.38, 0.4*(t*0.19).sin());
-        let fp2=p+drift2;
-        let cell2=1.4_f32;
-        let ex=fast_floor(fp2.x/cell2); let ey=fast_floor(fp2.y/cell2); let ez=fast_floor(fp2.z/cell2);
-        let eseed=ex*23.0+ey*71.0+ez*137.0;
-        let ep=V::new(ex*cell2+hash(eseed+4.0)*cell2,
-                      ey*cell2+hash(eseed+5.0)*cell2,
-                      ez*cell2+hash(eseed+6.0)*cell2);
-        let ed=(fp2-ep).len();
-        let em_mask=smoothstep(6.0,1.5,(p.x*p.x+p.z*p.z).sqrt())
-                   *clamp(p.y+1.3,0.0,1.0)*clamp(3.0-p.y,0.0,1.0);
-        glow=glow+V::new(0.90,0.55,0.15)*(0.0005/(0.022+ed*ed))*em_mask;
-
         let mist_vol=0.00035*(1.0-smoothstep(-0.4,0.8,p.y));
         glow=glow+V::new(0.06,0.09,0.20)*mist_vol;
 
@@ -931,6 +918,9 @@ pub(crate) fn run(seconds: f32, record: bool) {
         let cx = MapCtx::new(t);
         render_to_fb(&cx);
         unsafe { write_raw(FRAMEBUF.as_ptr(), W * PH * 3); }
-        if record { frame_t += 1.0 / 30.0; }
+        if record {
+            unsafe { write_stderr(b".".as_ptr(), 1); }
+            frame_t += 1.0 / 30.0;
+        }
     }
 }
