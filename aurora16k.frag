@@ -479,7 +479,7 @@ void cam_(out vec3 ro, out vec3 f, out vec3 r, out vec3 u) {
     float dist, ht, spd;
     if (act == 0) {
         dist = 7. - k * 3.;
-        ht = -.2 + k * 1.7;
+        ht = 2.5 - k * 1.0;
         spd = .07;
     } else if (act == 1) {
         dist = 4.2;
