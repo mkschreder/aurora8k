@@ -29,6 +29,12 @@ RUSTFLAGS_PROF = \
 SRCS8  = aurora8k.rs sys.rs
 SRCS16 = aurora16k.rs sys.rs
 
+# Must match W, PH in aurora16k.rs.
+# fdsrc + caps alone does not attach GstVideo metadata; videoconvert then
+# fails to map buffers ("invalid video buffer").  rawvideoparse frames the stream.
+AURORA16_W := 320
+AURORA16_H := 180
+
 .PHONY: all clean pack run run16 record16 profile8 profile16
 
 # ── Default: smallest uncompressed binary (~8.1 KB, custom minimal ELF) ────────
@@ -68,17 +74,21 @@ aurora16k: aurora16k_standard
 run: aurora8k
 	./aurora8k
 
-# Stream aurora16k to a GStreamer window (requires gst-launch-1.0 + autovideosink).
+# Stream aurora16k to a window via ffplay (part of the ffmpeg package).
 # Resolution must match the W/PH constants in aurora16k.rs (default 320×180).
+# GStreamer alternative (if gst-launch-1.0 is installed):
+#   ./aurora16k_standard | gst-launch-1.0 fdsrc fd=0 do-timestamp=true \
+#     ! rawvideoparse width=$(AURORA16_W) height=$(AURORA16_H) format=rgb \
+#     ! videoconvert ! autovideosink sync=false
 run16: aurora16k_standard
-	./aurora16k_standard | gst-launch-1.0 fdsrc fd=0 \
-	  ! video/x-raw,format=RGB,width=320,height=180,framerate=60/1 \
-	  ! videoconvert ! autovideosink
+	./aurora16k_standard | ffplay -f rawvideo -pixel_format rgb24 \
+	  -video_size $(AURORA16_W)x$(AURORA16_H) -i pipe:0 \
+	  -vf scale=1280:720
 
 # Record 90 seconds to an MP4 (requires ffmpeg).
 record16: aurora16k_standard
 	./aurora16k_standard | ffmpeg -f rawvideo -pixel_format rgb24 \
-	  -video_size 320x180 -framerate 30 -i pipe:0 \
+	  -video_size $(AURORA16_W)x$(AURORA16_H) -framerate 30 -i pipe:0 \
 	  -vf scale=1280:720 -c:v libx264 -crf 18 aurora16k.mp4
 
 # ── Flamegraph profiling (requires ~/.cargo/bin/flamegraph + perf) ─────────────
