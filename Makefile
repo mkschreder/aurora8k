@@ -80,10 +80,8 @@ run: aurora8k
 #     ! videoconvert ! autovideosink sync=false
 # ffplay blocks until the first full RGB frame (~15–40 s of CPU raytracing typical).
 run16: aurora16k_standard
-	@echo "run16: first picture may take ~15–40 s (full-frame CPU trace)."
 	./aurora16k_standard | ffplay -f rawvideo -pixel_format rgb24 \
-	  -video_size $(AURORA16_W)x$(AURORA16_H) -i pipe:0 \
-	  -vf scale=1280:720
+	  -video_size $(AURORA16_W)x$(AURORA16_H) -i pipe:0
 
 # Record the full 90 s animation to MP4 (requires ffmpeg).
 # Passes "record" as argv[1] so aurora16k uses fixed 1/30 s steps: every
@@ -92,7 +90,7 @@ run16: aurora16k_standard
 record16: aurora16k_standard
 	./aurora16k_standard record | ffmpeg -f rawvideo -pixel_format rgb24 \
 	  -video_size $(AURORA16_W)x$(AURORA16_H) -framerate 30 -i pipe:0 \
-	  -vf scale=1280:720 -c:v libx264 -crf 18 aurora16k.mp4
+	  -c:v libx264 -crf 18 aurora16k.mp4
 
 # ── Flamegraph profiling (requires ~/.cargo/bin/flamegraph + perf) ─────────────
 # Build with debug symbols (no strip) then capture a flamegraph SVG.
