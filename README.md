@@ -1,4 +1,4 @@
-# aurora64k
+# aurora8k
 
 A CPU-only SDF ray-marcher that renders a procedural 3D scene into a
 truecolor terminal. No GPU, no assets, no crates, no libc, no libm.
@@ -36,15 +36,15 @@ make pack UPX=upx   # if UPX is on PATH
 ## Run
 
 ```sh
-./aurora64k          # runs for 90 seconds then exits
+./aurora8k          # runs for 90 seconds then exits
 ```
 
 ## Size analysis
 
 | Binary | Size | Notes |
 |---|---|---|
-| `aurora64k` | ~9.3 KB | custom minimal ELF, 2 PHDRs, no section headers |
-| `aurora64k_packed` | ~8.4 KB | UPX `--nrv2d -9 --force` self-extractor |
+| `aurora8k` | ~9.3 KB | custom minimal ELF, 2 PHDRs, no section headers |
+| `aurora8k_packed` | ~8.4 KB | UPX `--nrv2d -9 --force` self-extractor |
 
 The theoretical minimum with perfect LZMA compression is ~5.1 KB
 (4.7 KB compressed code + ~400 B decompressor stub). 4 KB is not
@@ -55,7 +55,7 @@ exceeds 4 096 bytes.
 
 | File | Purpose |
 |---|---|
-| `aurora64k.rs` | scene geometry, lighting, camera, main loop |
+| `aurora8k.rs` | scene geometry, lighting, camera, main loop |
 | `sys.rs` | no_std Linux runtime: syscalls, inline math, I/O, timing |
 | `linker.ld` | minimal ELF layout (2 PHDRs, no gaps) |
 | `linker-upx.ld` | standard ELF layout required by UPX |
@@ -70,7 +70,7 @@ exceeds 4 096 bytes.
 - **`mmap`** — 1 MiB frame buffer allocated at startup (no BSS bloat)
 - **Volatile writes** in `Out::push_str` prevent LLVM from emitting `memcpy`
 
-### aurora64k.rs highlights
+### aurora8k.rs highlights
 
 - **`fmn` / `fmx`** — `if`-based min/max, compiles to `minss`/`maxss`
   not `fminf`/`fmaxf` PLT calls

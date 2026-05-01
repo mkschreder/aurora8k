@@ -1,13 +1,13 @@
-// aurora64k.rs - single-file CPU-only Rust terminal 64k-style intro.
+// aurora8k.rs - single-file CPU-only Rust terminal 64k-style intro.
 //
-// Build: rustc aurora64k.rs --edition 2021 \
+// Build: rustc aurora8k.rs --edition 2021 \
 //          -C opt-level=z -C panic=abort -C lto=fat -C codegen-units=1 \
 //          -C strip=symbols -C relocation-model=static \
 //          -C link-arg=-nostdlib \
 //          -C link-arg=-Wl,--build-id=none \
 //          -C link-arg=-Wl,--no-eh-frame-hdr \
 //          -C link-arg=-Wl,-T,linker.ld \
-//          -o aurora64k && strip --strip-section-headers aurora64k
+//          -o aurora8k && strip --strip-section-headers aurora8k
 //
 // Result: 8,139 bytes ELF, with AO.  Linux x86-64 only.
 // No GPU, no assets, no crates, no libc, no libm.  Pure math + raw syscalls.

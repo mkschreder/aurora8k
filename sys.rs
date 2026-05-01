@@ -1,4 +1,4 @@
-//! System layer for aurora64k: platform bindings, process entry, I/O, timing.
+//! System layer for aurora8k: platform bindings, process entry, I/O, timing.
 //!
 //! Fully self-contained — no libc, no libm.  Everything goes through raw Linux
 //! syscalls or SSE/inline-math implementations so the final binary has zero
@@ -6,14 +6,14 @@
 //!
 //! Build
 //! -----
-//!   rustc aurora64k.rs --edition 2021 \
+//!   rustc aurora8k.rs --edition 2021 \
 //!     -C opt-level=z -C panic=abort -C lto=fat -C codegen-units=1 \
 //!     -C strip=symbols \
 //!     -C link-arg=-nostdlib \
 //!     -C link-arg=-Wl,--build-id=none \
 //!     -C link-arg=-Wl,--no-eh-frame-hdr \
-//!     -o aurora64k
-//!   strip --remove-section=.eh_frame --remove-section=.comment aurora64k
+//!     -o aurora8k
+//!   strip --remove-section=.eh_frame --remove-section=.comment aurora8k
 
 use core::f32::consts::{PI, FRAC_PI_2, FRAC_PI_4};
 

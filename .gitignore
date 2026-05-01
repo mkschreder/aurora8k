@@ -1,0 +1,9 @@
+aurora8k
+aurora8k_packed
+aurora8k_standard
+# legacy names
+aurora64k
+aurora64k_packed
+aurora64k_standard
+*.rmeta
+*.rcgu.o

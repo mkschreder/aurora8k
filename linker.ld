@@ -1,4 +1,4 @@
-/* Minimal linker script for aurora64k — produces the smallest possible ELF.
+/* Minimal linker script for aurora8k — produces the smallest possible ELF.
    Merges ELF header, PHDRs, .text and .rodata into one RX segment at
    file offset 0 — no gaps, no page-sized holes.
    2 PHDRs total: LOAD(RX) + LOAD(RW-NOBITS) = 176 bytes of header overhead. */
