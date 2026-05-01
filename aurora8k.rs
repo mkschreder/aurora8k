@@ -9,7 +9,7 @@
 //          -C link-arg=-Wl,-T,linker.ld \
 //          -o aurora8k && strip --strip-section-headers aurora8k
 //
-// Result: 8,139 bytes ELF, with AO.  Linux x86-64 only.
+// Result: ~8 KB ELF.  Linux x86-64 only.
 // No GPU, no assets, no crates, no libc, no libm.  Pure math + raw syscalls.
 
 #![no_std]
@@ -21,15 +21,10 @@ use core::f32::consts::PI;
 use core::ops::{Add, Div, Mul, Neg, Sub};
 use sys::{F32Ext, Out, Term, clock_monotonic, elapsed, fast_floor, sleep_ms, term_size};
 
-// ── Min / max helpers that compile to minss/maxss, not fminf/fmaxf PLT calls ──
-// Using if-comparisons avoids llvm.minnum / llvm.maxnum which emit PLT calls.
-
 #[inline(always)] fn fmn(a: f32, b: f32) -> f32 { if a < b { a } else { b } }
 #[inline(always)] fn fmx(a: f32, b: f32) -> f32 { if a > b { a } else { b } }
 
-// ── Integer exponentiation (replaces powf PLT call) ──────────────────────────
-
-/// x^32 via 5 multiplications — near-identical specular tightness to x^38
+/// x^32 via 5 multiplications
 #[inline(always)]
 fn pow32(x: f32) -> f32 {
     let x2 = x*x; let x4 = x2*x2; let x8 = x4*x4; let x16 = x8*x8;
@@ -62,12 +57,10 @@ impl Neg for V { type Output=Self; fn neg(self)->Self{Self::new(-self.x,-self.y,
 fn clamp(x: f32, a: f32, b: f32) -> f32 { fmn(fmx(x, a), b) }
 fn mix(a: f32, b: f32, t: f32)   -> f32 { a + (b-a)*t }
 fn hash(n: f32) -> f32 {
-    // Integer bit-mixing — avoids a fast_sin call, still uniform in [0,1)
     let b = n.to_bits().wrapping_mul(0x9e3779b9);
     (b >> 9) as f32 * (1.0 / 8388608.0)
 }
 fn rep(x: f32, c: f32) -> f32 {
-    // rem_euclid(x, c) without fmodf: use floor
     let shifted = x + 0.5 * c;
     shifted - c * fast_floor(shifted / c) - 0.5 * c
 }
@@ -78,7 +71,7 @@ fn rot_y(p: V, a: f32) -> V { let (s,c)=a.sin_cos(); V::new(c*p.x+s*p.z, p.y, -s
 fn rot_x(p: V, a: f32) -> V { let (s,c)=a.sin_cos(); V::new(p.x, c*p.y-s*p.z, s*p.y+c*p.z) }
 fn rot_z(p: V, a: f32) -> V { let (s,c)=a.sin_cos(); V::new(c*p.x-s*p.y, s*p.x+c*p.y, p.z) }
 
-// ── Signed distance functions ─────────────────────────────────────────────────
+// ── SDF primitives ────────────────────────────────────────────────────────────
 
 fn sd_octa(p: V, s: f32) -> f32 { (p.x.abs()+p.y.abs()+p.z.abs()-s)*0.57735027 }
 fn sd_torus(p: V, r: f32, tube: f32) -> f32 {
@@ -117,8 +110,11 @@ fn map(p0: V, t: f32) -> Hit {
     put(&mut h, gem, 1);
 
     let r0 = sd_torus(rot_x(p0, t*0.7), 1.18, 0.035);
-    let r1 = sd_torus(rot_z(rot_y(p0, 1.57), -t*0.55), 1.34, 0.026);
-    let r2 = sd_torus(rot_y(rot_x(p0, 1.57), t*0.33), 1.52, 0.018);
+
+    // Ring 1: rot_y(p0, PI/2) is an exact coordinate swap — eliminates that sin_cos
+    let r1 = sd_torus(rot_z(V::new(p0.z, p0.y, -p0.x), -t*0.55), 1.34, 0.026);
+    // Ring 2: rot_x(p0, PI/2) is an exact coordinate swap — eliminates that sin_cos
+    let r2 = sd_torus(rot_y(V::new(p0.x, -p0.z, p0.y), t*0.33), 1.52, 0.018);
     put(&mut h, fmn(r0, fmn(r1, r2)), 2);
 
     let a  = p0.z.atan2(p0.x);
@@ -127,7 +123,7 @@ fn map(p0: V, t: f32) -> Hit {
     let q  = V::new(rr-2.35, p0.y, aa*rr);
     let shaft = sd_cyl_y(q, 0.07, 1.1);
     let qc  = V::new(q.x, q.y.abs() - 1.04, q.z);
-    let cap = qc.len() - 0.11;  // sphere caps: same look at terminal res, simpler SDF
+    let cap = qc.len() - 0.11;
     put(&mut h, fmn(shaft, cap), 3);
 
     h
@@ -136,7 +132,6 @@ fn map(p0: V, t: f32) -> Hit {
 // ── Lighting ──────────────────────────────────────────────────────────────────
 
 fn normal(p: V, t: f32) -> V {
-    // Tetrahedral sampling: 4 map() calls instead of 6, better gradient quality
     let e = 0.004;
     let k1 = V::new( 1.0,-1.0,-1.0); let k2 = V::new(-1.0,-1.0, 1.0);
     let k3 = V::new(-1.0, 1.0,-1.0); let k4 = V::new( 1.0, 1.0, 1.0);
@@ -182,7 +177,6 @@ fn sky(rd: V, t: f32) -> V {
     let y  = clamp(rd.y*0.5 + 0.5, 0.0, 1.0);
     let mut c = V::new(0.03,0.025,0.08)*(1.0-y) + V::new(0.02,0.10,0.18)*y;
     let u  = rd.z.atan2(rd.x)*7.0;
-    // Replace acos(rd.y)*9 with linear approximation — same angular range, no acosf PLT call
     let v  = (1.0 - clamp(rd.y, -1.0, 1.0)) * (9.0 * PI / 2.0);
     let id = (fast_floor(u)*37.0 + fast_floor(v)*113.0).abs();
     let star = fmx(hash(id + fast_floor(t*0.03)) - 0.996, 0.0) * 250.0;
@@ -191,7 +185,7 @@ fn sky(rd: V, t: f32) -> V {
 }
 
 fn shade(ro: V, rd: V, t: f32) -> V {
-    let sky_col = sky(rd, t);   // compute once — reused for miss path and fog blend
+    let sky_col = sky(rd, t);
     let mut depth = 0.0_f32;
     let mut glow  = V::new(0.0,0.0,0.0);
     let mut mat   = 0;
@@ -210,9 +204,8 @@ fn shade(ro: V, rd: V, t: f32) -> V {
     let lp1  = V::new(2.6*(t*0.7).cos(), 2.1, 2.6*(t*0.7).sin());
 
     let mut col = base*0.08;
-    let lp = lp1;
     {
-        let l    = (lp-p).norm();
+        let l    = (lp1-p).norm();
         let dif  = fmx(n.dot(l), 0.0) * shadow(p+n*0.01, l, t);
         let r    = (n*(2.0*n.dot(l)) - l).norm();
         let spec = pow32(clamp(r.dot(-rd), 0.0, 1.0));
@@ -240,7 +233,6 @@ fn camera(t: f32) -> (V, V, V, V) {
 // ── Tone mapping ──────────────────────────────────────────────────────────────
 
 fn tonemap(c: V) -> (u8, u8, u8) {
-    // Reinhard compression + sqrt gamma (gamma 2.0 ≈ 2.2, saves powf(0.4545) PLT call)
     let to_u8 = |v: f32| (fmn(fmx(v / (1.0+v), 0.0), 1.0).sqrt() * 255.0) as u8;
     (to_u8(c.x), to_u8(c.y), to_u8(c.z))
 }
