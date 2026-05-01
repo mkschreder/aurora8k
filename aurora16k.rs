@@ -15,8 +15,8 @@ mod sys;
 use sys::{clock_monotonic, elapsed, write_raw, write_stderr};
 
 // ── Resolution ───────────────────────────────────────────────────────────────
-const W:  usize = 320;
-const PH: usize = 180;
+const W:  usize = 640;
+const PH: usize = 360;
 
 // glReadPixels writes into this BSS buffer (bottom-to-top row order from GL).
 static mut FRAMEBUF: [u8; W * PH * 3] = [0u8; W * PH * 3];

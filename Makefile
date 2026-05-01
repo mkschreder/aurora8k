@@ -43,8 +43,8 @@ SRCS8  = aurora8k.rs sys.rs
 SRCS16 = aurora16k.rs sys.rs
 
 # Must match W, PH in aurora16k.rs.
-AURORA16_W := 320
-AURORA16_H := 180
+AURORA16_W := 640
+AURORA16_H := 360
 
 .PHONY: all clean pack run run16 record16 profile8 profile16
 
