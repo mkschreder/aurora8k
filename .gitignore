@@ -1,11 +1,23 @@
 aurora8k
 aurora8k_packed
 aurora8k_standard
+aurora8k_prof
+aurora8k_timing
 aurora16k
 aurora16k_standard
+aurora16k_prof
+aurora16k_profile
+aurora8k_profile
+aurora16k.mp4
+# debug/scratch
+test_write_raw.rs
+test_write_raw
 # legacy names
 aurora64k
 aurora64k_packed
 aurora64k_standard
 *.rmeta
 *.rcgu.o
+perf.data
+perf.data.old
+flamegraph*.svg
