@@ -209,6 +209,13 @@ fn buf_init() {
     unsafe { BUF_PTR = p as *mut u8; }
 }
 
+/// Allocate a private anonymous memory region of `size` bytes.
+/// Returns the mapped address.  Caller must not exceed `size` bytes.
+#[allow(dead_code)]
+pub unsafe fn alloc_anon(size: usize) -> *mut u8 {
+    sys6(9, 0, size as i64, 3, 0x22, -1, 0) as *mut u8
+}
+
 /// Write-only byte buffer backed by a mmap'd 1 MiB region.
 pub struct Out(pub usize);
 
