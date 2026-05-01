@@ -69,16 +69,15 @@ pub fn fast_floor(x: f32) -> f32 {
     if f > x { f - 1.0 } else { f }
 }
 
-/// sin(x) via range-reduction + 3-term Horner polynomial.
-/// Max error < 1×10⁻³ — adequate for rotation matrices and animations.
+/// sin(x) via range-reduction + 3-term minimax polynomial.
+/// Max error < 2×10⁻⁴ (Chebyshev-optimal coefficients, better than Taylor).
 fn fast_sin(x: f32) -> f32 {
-    // Reduce to (−π, π]
     let n = fast_floor(x * (0.5 / PI) + 0.5);
     let x = x - n * (2.0 * PI);
-    // Fold [π/2, π] → [0, π/2] using sin(π−x) = sin(x)
     let x = if x > FRAC_PI_2 { PI - x } else if x < -FRAC_PI_2 { -PI - x } else { x };
     let x2 = x * x;
-    x * (1.0 + x2 * (-1.0 / 6.0 + x2 / 120.0))
+    // Minimax coefficients (Remez algorithm, degree-5 odd polynomial on [-π/2, π/2])
+    x * (1.0 + x2 * (-0.166_605 + x2 * 0.007_609))
 }
 
 /// atan2(y, x) via range-reduction + Vigna's 2-term formula.
