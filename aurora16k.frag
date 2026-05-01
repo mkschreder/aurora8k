@@ -168,15 +168,17 @@ vec2 map_(vec3 p0, Ctx cx) {
                                                 sd_torus(q + vec3(0, 1.04, 0), .11, .025))),
                  3.);
     }
-    vec3 gv = vec3(rep(p0.x + .3 * cx.floor_s, .75), p0.y + 1.215, rep(p0.z, .75));
-    h = hitp(h, min(sd_box(gv, vec3(.20, .018, .018)), sd_box(gv, vec3(.018, .018, .20))), 5.);
+    if (rr < 4.) {
+        vec3 gv = vec3(rep(p0.x + .3 * cx.floor_s, .75), p0.y + 1.215, rep(p0.z, .75));
+        h = hitp(h, min(sd_box(gv, vec3(.20, .018, .018)), sd_box(gv, vec3(.018, .018, .20))), 5.);
+    }
     h = hitp(
         h,
         sd_box(vec3(rr - 1.90, p0.y + 1.215, rep(a, 2. * PI / 16.) * rr), vec3(.022, .022, .095)),
         5.);
     if (rr > 1.2 && rr < 2.3) {
         float s12 = 2. * PI / 12., sid = floor(a / s12 + .5), aa12 = a - sid * s12,
-              hs = hash(sid * 7.);
+              hs = hash(mod(sid, 12.) * 7.);
         h = hitp(h,
                  sd_box(rot_z(vec3(rr - 1.72, p0.y - .28 * sin(hs * 6. + T * .5), aa12 * rr),
                               .3 + hs * .55),
@@ -193,7 +195,8 @@ vec2 map_(vec3 p0, Ctx cx) {
                  3.);
     }
     if (rr > 3.5 && rr < 5.8) {
-        float s7 = 2. * PI / 7., sid7 = floor(a / s7 + .5), a7 = a - sid7 * s7, ss = sid7 * 9.3;
+        float s7 = 2. * PI / 7., sid7 = floor(a / s7 + .5), a7 = a - sid7 * s7,
+              ss = mod(sid7, 7.) * 9.3;
         h = hitp(h,
                  sd_box(rot_z(vec3(rr - 4.75, p0.y + 1.25, a7 * rr), .08 * sin(ss)),
                         vec3(.10, .70 + hash(ss) * .30, .04)),
@@ -208,7 +211,8 @@ vec2 map_(vec3 p0, Ctx cx) {
     h = hitp(h, sd_box(vec3(ar, p0.y + 1.21, rep(a, 2. * PI / 8.) * ar), vec3(.72, .035, .32)), 3.);
     h = hitp(h, sd_cyl_y(vec3(p0.x, p0.y + 1.18, p0.z), .28, .07), 3.);
     if (rr > .8 && rr < 1.9) {
-        float s5 = 2. * PI / 5., sid5 = floor(a / s5 + .5), a5 = a - sid5 * s5, m5s = sid5 * 11.7;
+        float s5 = 2. * PI / 5., sid5 = floor(a / s5 + .5), a5 = a - sid5 * s5,
+              m5s = mod(sid5, 5.) * 11.7;
         h = hitp(h,
                  sd_box(rot_z(vec3(rr - 1.25, p0.y + 1.25, a5 * rr), .05 * sin(m5s)),
                         vec3(.06, .35 + hash(m5s) * .20, .02)),
@@ -220,7 +224,8 @@ vec2 map_(vec3 p0, Ctx cx) {
             h = fh;
     }
     if (rr > 9.5) {
-        float s6 = 2. * PI / 6., sid6 = floor(a / s6 + .5), a6 = a - sid6 * s6, rs = sid6 * 17.1,
+        float s6 = 2. * PI / 6., sid6 = floor(a / s6 + .5), a6 = a - sid6 * s6,
+              rs = mod(sid6, 6.) * 17.1,
               rh = .55 + hash(rs) * .65;
         vec3 rpp = vec3(
             rr - 11.5,
